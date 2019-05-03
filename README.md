@@ -2,6 +2,10 @@
 
 It's a package called xfl_dp written for post processing of XFEL AGIPD data preprocessed by cheetah. The package is written in Python 3.X.
 
+## Features
+
+The package performs triming out black images, intensity normalization, applying AGIPD geometry to stitch frames and writing frames and their corresponding pulseIDs and trainIDs in the cxi file.
+
 ## Required dependencies:
 
 - NumPy
