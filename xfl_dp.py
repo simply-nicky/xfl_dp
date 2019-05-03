@@ -11,8 +11,9 @@ def get_data_size(rnum, cnum, tag, ext, online):
 
 def add_data_to_dset(dset, data):
     dset.refresh()
-    dset.resize((dset.shape[0] + data.shape[0],) + dset.shape[1:])
-    dset[dset.shape[0]:] = data
+    dsetshape = dset.shape
+    dset.resize((dsetshape[0] + data.shape[0],) + dsetshape[1:])
+    dset[dsetshape[0]:] = data
     dset.flush()
 
 def get_first_image(rnum, cnum, tag, ext, bg_roi, lim, online):
@@ -20,6 +21,7 @@ def get_first_image(rnum, cnum, tag, ext, bg_roi, lim, online):
     pulse_ids = file_handler[utils.pulsepath]
     train_ids = file_handler[utils.trainpath]
     raw_data = file_handler[utils.datapath]
+    size = raw_data.shape[0]
     idx = 0
     while raw_data[idx].max() < lim: idx += 1
     else:
@@ -27,7 +29,7 @@ def get_first_image(rnum, cnum, tag, ext, bg_roi, lim, online):
         bg = raw_data[idx][bg_roi].sum().astype(np.float32)
         data = raw_data[idx].astype(np.float32) / bg
     file_handler.close()
-    return data[np.newaxis], np.array([tid], dtype=np.uint32), np.array([pid], dtype=np.uint32), raw_data.shape[0], idx + 1
+    return data[np.newaxis], np.array([tid], dtype=np.uint32), np.array([pid], dtype=np.uint32), size, idx + 1
 
 def data_chunk(start, stop, rnum, cnum, tag, ext, bg_roi, lim, online):
     file_handler = h5py.File(utils.get_path_to_data(rnum, cnum, tag, ext, online), 'r')
@@ -72,8 +74,9 @@ def data_serial(rnum, cnum, tag, ext='cxi', bg_roi=(slice(5000), slice(None)), l
     return np.array(data, dtype=np.float32), np.array(tidslist, dtype=np.uint32), np.array(pidslist, dtype=np.uint32)
 
 def write_data(rnum, cnum, tag, ext='cxi', bg_roi=(slice(5000), slice(None)), lim=500, online=True):
+    path = utils.make_output_dir_and_path(utils.outpath.format(rnum, cnum, ext))
     frame, tid, pid, size, idx = get_first_image(rnum, cnum, tag, ext, bg_roi, lim, online)
-    outfile = h5py.File(utils.outpath.format(rnum, cnum, ext), 'w', libver='latest')
+    outfile = h5py.File(path, 'w', libver='latest')
     datagroup = outfile.create_group('data')
     dataset = datagroup.create_dataset('data', chunks=frame.shape, maxshape=(None,) + frame.shape[1:], data=frame, dtype=np.float32)
     trainset = datagroup.create_dataset('trainID', chunks=True, maxshape=(None,), data=tid, dtype=np.uint32)
