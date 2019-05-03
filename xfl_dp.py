@@ -3,9 +3,8 @@ from multiprocessing import cpu_count
 from functools import partial
 from . import utils
 
-def get_data_shape(rnum, cnum, ext='cxi', online=True):
-    path = utils.basepath if online else utils.userpath
-    f = h5py.File(path.format(rnum, cnum, ext), 'r')
+def get_data_shape(rnum, cnum, tag, ext, online):
+    f = h5py.File(utils.get_path_to_data(rnum, cnum, tag, ext, online), 'r')
     shape = f[utils.datapath].shape
     f.close()
     return shape
@@ -19,9 +18,8 @@ def add_data_to_dset(dset, data, dsetshape):
     dset[dsetshape[0]:] = data
     dset.flush()
 
-def get_first_image(rnum, cnum, ext, bg_roi, lim, online):
-    path = utils.basepath if online else utils.userpath
-    file_handler = h5py.File(path.format(rnum, cnum, ext), 'r')
+def get_first_image(rnum, cnum, tag, ext, bg_roi, lim, online):
+    file_handler = h5py.File(utils.get_path_to_data(rnum, cnum, tag, ext, online), 'r')
     pulse_ids = file_handler[utils.pulsepath]
     train_ids = file_handler[utils.trainpath]
     raw_data = file_handler[utils.datapath]
@@ -34,9 +32,8 @@ def get_first_image(rnum, cnum, ext, bg_roi, lim, online):
     file_handler.close()
     return data[np.newaxis], np.array([tid], dtype=np.uint32), np.array([pid], dtype=np.uint32), idx + 1
 
-def data_chunk(start, stop, rnum, cnum, ext, bg_roi, lim, online):
-    path = utils.basepath if online else utils.userpath
-    file_handler = h5py.File(path.format(rnum, cnum, ext), 'r')
+def data_chunk(start, stop, rnum, cnum, tag, ext, bg_roi, lim, online):
+    file_handler = h5py.File(utils.get_path_to_data(rnum, cnum, tag, ext, online), 'r')
     pulse_ids = file_handler[utils.pulsepath]
     train_ids = file_handler[utils.trainpath]
     raw_data = file_handler[utils.datapath]
@@ -50,8 +47,8 @@ def data_chunk(start, stop, rnum, cnum, ext, bg_roi, lim, online):
             data.append(frame / bg)
     return np.array(data, dtype=np.float32), np.array(tidslist, dtype=np.uint32), np.array(pidslist, dtype=np.uint32)
 
-def data(rnum, cnum, ext='cxi', bg_roi=(slice(5000), slice(None)), lim=500, online=True):
-    shape = get_data_shape(rnum, cnum, ext, online)
+def data(rnum, cnum, tag, ext='cxi', bg_roi=(slice(5000), slice(None)), lim=500, online=True):
+    shape = get_data_shape(rnum, cnum, tag, ext, online)
     worker = partial(data_chunk, rnum=rnum, cnum=cnum, ext=ext, bg_roi=bg_roi, lim=lim, online=online)
     nums = np.linspace(0, shape[0], cpu_count() + 1).astype(int)
     datalist, tidslist, pidslist = [], [], []
@@ -62,9 +59,8 @@ def data(rnum, cnum, ext='cxi', bg_roi=(slice(5000), slice(None)), lim=500, onli
             pidslist.extend(pids)
     return np.array(datalist, dtype=np.float32), np.array(tidslist, dtype=np.uint32), np.array(pidslist, dtype=np.uint32)
 
-def data_serial(rnum, cnum, ext='cxi', bg_roi=(slice(5000), slice(None)), lim=500, online=True):
-    path = utils.basepath if online else utils.userpath
-    file_handler = h5py.File(path.format(rnum, cnum, ext), 'r', driver='family')
+def data_serial(rnum, cnum, tag, ext='cxi', bg_roi=(slice(5000), slice(None)), lim=500, online=True):
+    file_handler = h5py.File(utils.get_path_to_data(rnum, cnum, tag, ext, online), 'r')
     pulse_ids = file_handler[utils.pulsepath]
     train_ids = file_handler[utils.trainpath]
     raw_data = file_handler[utils.datapath]
@@ -78,16 +74,16 @@ def data_serial(rnum, cnum, ext='cxi', bg_roi=(slice(5000), slice(None)), lim=50
     file_handler.close()
     return np.array(data, dtype=np.float32), np.array(tidslist, dtype=np.uint32), np.array(pidslist, dtype=np.uint32)
 
-def write_data(rnum, cnum, ext='cxi', bg_roi=(slice(5000), slice(None)), lim=500, online=True):
-    shape = get_data_shape(rnum, cnum, ext, online)
-    frame, tid, pid, idx = get_first_image(rnum, cnum, ext, bg_roi, lim, online)
+def write_data(rnum, cnum, tag, ext='cxi', bg_roi=(slice(5000), slice(None)), lim=500, online=True):
+    shape = get_data_shape(rnum, cnum, tag, ext, online)
+    frame, tid, pid, idx = get_first_image(rnum, cnum, tag, ext, bg_roi, lim, online)
     outfile = h5py.File(utils.outpath.format(rnum, cnum, ext), 'w', libver='latest')
     datagroup = outfile.create_group('data')
     dataset = datagroup.create_dataset('data', chunks=(1,) + shape[1:], maxshape=(None,) + shape[1:], data=frame, dtype=np.float32)
     trainset = datagroup.create_dataset('trainID', chunks=True, maxshape=(None,), data=tid, dtype=np.uint32)
     pulseset = datagroup.create_dataset('pulseID', chunks=True, maxshape=(None,), data=pid, dtype=np.uint32)
     outfile.swmr_mode = True
-    worker = partial(data_chunk, rnum=rnum, cnum=cnum, ext=ext, bg_roi=bg_roi, lim=lim, online=online)
+    worker = partial(data_chunk, rnum=rnum, cnum=cnum, tag=tag, ext=ext, bg_roi=bg_roi, lim=lim, online=online)
     nums = np.linspace(idx, shape[0], cpu_count() + 1).astype(int)
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for data, tids, pids in executor.map(utils.worker_star(worker), zip(nums[:-1], nums[1:])):
