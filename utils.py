@@ -31,7 +31,7 @@ def make_output_dir(path):
         if e.errno != errno.EEXIST: raise
 
 def output_path(rnum, cnum, ext):
-    abspath = os.path.join(os.path.dirname(__file__), outpath.format(rnum, cnum, ext))
+    abspath = os.path.abspath(os.path.join(os.path.dirname(__file__), outpath.format(rnum, cnum, ext)))
     if not os.path.isfile(abspath):
         return abspath
     else:
