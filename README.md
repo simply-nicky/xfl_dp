@@ -6,6 +6,7 @@ It's a package called xfl_dp written for post processing of XFEL AGIPD data prep
 
 - NumPy
 - h5py
+- cfelpyutils
 
 ## How to use
 
