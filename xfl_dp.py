@@ -27,7 +27,7 @@ def get_first_image(rnum, cnum, tag, ext, bg_roi, lim, online):
     else:
         pid, tid = pulse_ids[idx], train_ids[idx]
         bg = raw_data[idx][bg_roi].sum().astype(np.float32)
-        data = raw_data[idx].astype(np.float32) / bg
+        data = utils.apply_agipd_geom(raw_data[idx]).astype(np.float32) / bg
     file_handler.close()
     return data[np.newaxis], np.array([tid], dtype=np.uint32), np.array([pid], dtype=np.uint32), size, idx + 1
 
@@ -43,7 +43,7 @@ def data_chunk(start, stop, rnum, cnum, tag, ext, bg_roi, lim, online):
             pidslist.append(pulse_ids[idx])
             tidslist.append(train_ids[idx])
             bg = frame[bg_roi].sum().astype(np.float32)
-            data.append(frame / bg)
+            data.append(utils.apply_agipd_geom(frame).astype(np.float32) / bg)
     return np.array(data, dtype=np.float32), np.array(tidslist, dtype=np.uint32), np.array(pidslist, dtype=np.uint32)
 
 def data(rnum, cnum, tag, ext='cxi', bg_roi=(slice(5000), slice(None)), lim=500, online=True):
