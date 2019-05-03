@@ -102,7 +102,8 @@ def main():
     args = parser.parse_args()
     if args.verbosity:
         print("List of typed arguments: %s" % args)
-        print("Writing data to folder: %s" % utils.get_path_to_data(args.rnum, args.cnum, args.tag, 'cxi', True))
+        print("cheetah data is located in %s" % utils.get_path_to_data(args.rnum, args.cnum, args.tag, 'cxi', True))
+        print("Writing data to folder: %s" % utils.output_path(args.rnum, args.cnum, 'cxi'))
         write_data(args.rnum, args.cnum, args.tag, 'cxi', (slice(5000), slice(None)), args.limit, True)
         print("Done")
     else:
