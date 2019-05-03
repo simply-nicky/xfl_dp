@@ -24,10 +24,15 @@ def get_path_to_data(rnum, cnum, tag, ext, online):
 def apply_agipd_geom(frame):
     return apply_geometry_to_data(frame, AGIPD_geom)
 
-def make_output_dir_and_path(path):
-    abspath = os.path.join(os.path.dirname(__file__), path)
+def make_output_dir(path):
     try:
-        os.makedirs(os.path.dirname(abspath))
+        os.makedirs(os.path.dirname(path))
     except OSError as e:
         if e.errno != errno.EEXIST: raise
-    return abspath
+
+def output_path(rnum, cnum, ext):
+    abspath = os.path.join(os.path.dirname(__file__), outpath.format(rnum, cnum, ext))
+    if not os.path.isfile(abspath):
+        return abspath
+    else:
+        return output_path(rnum, cnum + 1, ext)

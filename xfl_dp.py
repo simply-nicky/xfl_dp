@@ -74,7 +74,8 @@ def data_serial(rnum, cnum, tag, ext='cxi', bg_roi=(slice(5000), slice(None)), l
     return np.array(data, dtype=np.float32), np.array(tidslist, dtype=np.uint32), np.array(pidslist, dtype=np.uint32)
 
 def write_data(rnum, cnum, tag, ext='cxi', bg_roi=(slice(5000), slice(None)), lim=500, online=True):
-    path = utils.make_output_dir_and_path(utils.outpath.format(rnum, cnum, ext))
+    path = utils.output_path(rnum, cnum, ext)
+    utils.make_output_dir(path)
     frame, tid, pid, size, idx = get_first_image(rnum, cnum, tag, ext, bg_roi, lim, online)
     outfile = h5py.File(path, 'w', libver='latest')
     datagroup = outfile.create_group('data')
