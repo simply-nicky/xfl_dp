@@ -1,4 +1,4 @@
-import numpy as np, h5py, concurrent.futures
+import numpy as np, h5py, concurrent.futures, argparse
 from multiprocessing import cpu_count
 from functools import partial
 from . import utils
@@ -91,14 +91,18 @@ def write_data(rnum, cnum, tag, ext='cxi', bg_roi=(slice(5000), slice(None)), li
             add_data_to_dset(pulseset, pids)
     outfile.close()
 
-if __name__ == "__main__":
-    import argparse
-    from . import utils
+def main():
     parser = argparse.ArgumentParser(description='Run XFEL post processing of cheetah data')
     parser.add_argument('rnum', type=int, help='run number')
     parser.add_argument('cnum', type=int, help='cheetah number')
     parser.add_argument('tag', type=str, help='cheetah tag associated with the current run (written after hyphen in cheetah folder name)')
     parser.add_argument('limit', type=int, default=500, help='minimum ADU value to trim out black images')
+    parser.add_argument('-v', '--verbosity', action='store_true', help='increase output verbosity')
     args = parser.parse_args()
-
-    write_data(args.rnum, args.cnum, args.tag, 'cxi', (slice(5000), slice(None)), args.lim, True)
+    if args.verbosity:
+        print("List of typed arguments: %s" % args)
+        print("Writing data to folder: %s" % utils.get_path_to_data(args.rnum, args.cnum, args.tag, 'cxi', True))
+        write_data(args.rnum, args.cnum, args.tag, 'cxi', (slice(5000), slice(None)), args.lim, True)
+        print("Done")
+    else:
+        write_data(args.rnum, args.cnum, args.tag, 'cxi', (slice(5000), slice(None)), args.lim, True)       
