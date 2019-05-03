@@ -93,6 +93,7 @@ def write_data(rnum, cnum, tag, ext='cxi', bg_roi=(slice(5000), slice(None)), li
 
 if __name__ == "__main__":
     import argparse
+    from . import utils
     parser = argparse.ArgumentParser(description='Run XFEL post processing of cheetah data')
     parser.add_argument('rnum', type=int, help='run number')
     parser.add_argument('cnum', type=int, help='cheetah number')
