@@ -3,19 +3,16 @@ from multiprocessing import cpu_count
 from functools import partial
 from . import utils
 
-def get_data_shape(rnum, cnum, tag, ext, online):
+def get_data_size(rnum, cnum, tag, ext, online):
     f = h5py.File(utils.get_path_to_data(rnum, cnum, tag, ext, online), 'r')
-    shape = f[utils.datapath].shape
+    size = f[utils.datapath].shape[0]
     f.close()
-    return shape
+    return size
 
-def read_dset_shape(dset):
+def add_data_to_dset(dset, data):
     dset.refresh()
-    return dset.shape
-
-def add_data_to_dset(dset, data, dsetshape):
-    dset.resize((dsetshape[0] + data.shape[0],) + dsetshape[1:])
-    dset[dsetshape[0]:] = data
+    dset.resize((dset.shape[0] + data.shape[0],) + dset.shape[1:])
+    dset[dset.shape[0]:] = data
     dset.flush()
 
 def get_first_image(rnum, cnum, tag, ext, bg_roi, lim, online):
@@ -30,7 +27,7 @@ def get_first_image(rnum, cnum, tag, ext, bg_roi, lim, online):
         bg = raw_data[idx][bg_roi].sum().astype(np.float32)
         data = raw_data[idx].astype(np.float32) / bg
     file_handler.close()
-    return data[np.newaxis], np.array([tid], dtype=np.uint32), np.array([pid], dtype=np.uint32), idx + 1
+    return data[np.newaxis], np.array([tid], dtype=np.uint32), np.array([pid], dtype=np.uint32), raw_data.shape[0], idx + 1
 
 def data_chunk(start, stop, rnum, cnum, tag, ext, bg_roi, lim, online):
     file_handler = h5py.File(utils.get_path_to_data(rnum, cnum, tag, ext, online), 'r')
@@ -48,9 +45,9 @@ def data_chunk(start, stop, rnum, cnum, tag, ext, bg_roi, lim, online):
     return np.array(data, dtype=np.float32), np.array(tidslist, dtype=np.uint32), np.array(pidslist, dtype=np.uint32)
 
 def data(rnum, cnum, tag, ext='cxi', bg_roi=(slice(5000), slice(None)), lim=500, online=True):
-    shape = get_data_shape(rnum, cnum, tag, ext, online)
+    size = get_data_size(rnum, cnum, tag, ext, online)
     worker = partial(data_chunk, rnum=rnum, cnum=cnum, ext=ext, bg_roi=bg_roi, lim=lim, online=online)
-    nums = np.linspace(0, shape[0], cpu_count() + 1).astype(int)
+    nums = np.linspace(0, size, cpu_count() + 1).astype(int)
     datalist, tidslist, pidslist = [], [], []
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for data, pids, tids in executor.map(utils.worker_star(worker), zip(nums[:-1], nums[1:])):
@@ -75,20 +72,18 @@ def data_serial(rnum, cnum, tag, ext='cxi', bg_roi=(slice(5000), slice(None)), l
     return np.array(data, dtype=np.float32), np.array(tidslist, dtype=np.uint32), np.array(pidslist, dtype=np.uint32)
 
 def write_data(rnum, cnum, tag, ext='cxi', bg_roi=(slice(5000), slice(None)), lim=500, online=True):
-    shape = get_data_shape(rnum, cnum, tag, ext, online)
-    frame, tid, pid, idx = get_first_image(rnum, cnum, tag, ext, bg_roi, lim, online)
+    frame, tid, pid, size, idx = get_first_image(rnum, cnum, tag, ext, bg_roi, lim, online)
     outfile = h5py.File(utils.outpath.format(rnum, cnum, ext), 'w', libver='latest')
     datagroup = outfile.create_group('data')
-    dataset = datagroup.create_dataset('data', chunks=(1,) + shape[1:], maxshape=(None,) + shape[1:], data=frame, dtype=np.float32)
+    dataset = datagroup.create_dataset('data', chunks=frame.shape, maxshape=(None,) + frame.shape[1:], data=frame, dtype=np.float32)
     trainset = datagroup.create_dataset('trainID', chunks=True, maxshape=(None,), data=tid, dtype=np.uint32)
     pulseset = datagroup.create_dataset('pulseID', chunks=True, maxshape=(None,), data=pid, dtype=np.uint32)
     outfile.swmr_mode = True
     worker = partial(data_chunk, rnum=rnum, cnum=cnum, tag=tag, ext=ext, bg_roi=bg_roi, lim=lim, online=online)
-    nums = np.linspace(idx, shape[0], cpu_count() + 1).astype(int)
+    nums = np.linspace(idx, size, cpu_count() + 1).astype(int)
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for data, tids, pids in executor.map(utils.worker_star(worker), zip(nums[:-1], nums[1:])):
-            dshape, tshape, pshape = map(read_dset_shape, (dataset, trainset, pulseset))
-            add_data_to_dset(dataset, data, dshape)
-            add_data_to_dset(trainset, tids, tshape)
-            add_data_to_dset(pulseset, pids, pshape)
+            add_data_to_dset(dataset, data)
+            add_data_to_dset(trainset, tids)
+            add_data_to_dset(pulseset, pids)
     outfile.close()

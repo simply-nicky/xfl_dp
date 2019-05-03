@@ -5,6 +5,8 @@ datapath = "entry_1/instrument_1/detector_1/detector_corrected/data"
 trainpath = "/instrument/trainID"
 pulsepath = "/instrument/pulseID"
 
+AGIPD_geom = cfelpyutils.crystfel_utils.load_crystfel_geometry("/home/vmariani/Workspaces-refactored/crystallography/karabo/agipd.geom")
+
 class worker_star(object):
     def __init__(self, worker):
         self.worker = worker
@@ -14,3 +16,6 @@ class worker_star(object):
 
 def get_path_to_data(rnum, cnum, tag, ext, online):
     return basepath.format(rnum, cnum, tag, ext) if online else userpath.format(rnum, cnum, ext)
+
+def apply_agipd_geom(frame):
+    return cfelpyutils.geometry_utils.apply_geometry_to_data(frame, AGIPD_geom)
