@@ -22,7 +22,7 @@ positional arguments:
   rnum             run number
   cnum             cheetah number
   tag              cheetah tag associated with the current run (written after
-                   hyphen in cheetah folder name)
+                   a hyphen in the cheetah folder name)
   limit            minimum ADU value to trim out black images
 
 optional arguments:

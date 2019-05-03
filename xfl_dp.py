@@ -98,7 +98,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run XFEL post processing of cheetah data')
     parser.add_argument('rnum', type=int, help='run number')
     parser.add_argument('cnum', type=int, help='cheetah number')
-    parser.add_argument('tag', type=str, help='cheetah tag associated with the current run (written after hyphen in cheetah folder name)')
+    parser.add_argument('tag', type=str, help='cheetah tag associated with the current run (written after a hyphen in the cheetah folder name)')
     parser.add_argument('limit', type=int, nargs='?', default=500, help='minimum ADU value to trim out black images')
     parser.add_argument('-v', '--verbosity', action='store_true', help='increase output verbosity')
     args = parser.parse_args()
