@@ -102,7 +102,7 @@ def main():
     if args.verbosity:
         print("List of typed arguments: %s" % args)
         print("Writing data to folder: %s" % utils.get_path_to_data(args.rnum, args.cnum, args.tag, 'cxi', True))
-        write_data(args.rnum, args.cnum, args.tag, 'cxi', (slice(5000), slice(None)), args.lim, True)
+        write_data(args.rnum, args.cnum, args.tag, 'cxi', (slice(5000), slice(None)), args.limit, True)
         print("Done")
     else:
-        write_data(args.rnum, args.cnum, args.tag, 'cxi', (slice(5000), slice(None)), args.lim, True)       
+        write_data(args.rnum, args.cnum, args.tag, 'cxi', (slice(5000), slice(None)), args.limit, True)       
