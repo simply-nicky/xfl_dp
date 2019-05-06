@@ -31,10 +31,13 @@ positional arguments:
 
 optional arguments:
   -h, --help       show this help message and exit
+  -n, --normalize  normalize frame intensities
   -v, --verbosity  increase output verbosity
+
 $ python -m xfl_dp -v 206 0 mll 500
 List of typed arguments:
 cnum=0
+normalize=False
 verbosity=True
 tag=mll
 limit=500
