@@ -8,6 +8,7 @@ outpath = "../hdf5/r{0:04d}-processed/XFEL-r{0:04d}-c{1:02d}-processed.{2:s}"
 datapath = "entry_1/instrument_1/detector_1/detector_corrected/data"
 trainpath = "/instrument/trainID"
 pulsepath = "/instrument/pulseID"
+bg_roi = (slice(5000), slice(None))
 
 AGIPD_geom = load_crystfel_geometry("/home/vmariani/Workspaces-refactored/crystallography/karabo/agipd.geom")
 

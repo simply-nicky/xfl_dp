@@ -1,2 +1,2 @@
-from .xfl_dp import main
+from .wrapper import main
 main()
