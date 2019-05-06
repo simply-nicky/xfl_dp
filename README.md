@@ -18,7 +18,7 @@ You can import the package or use it as a command line tool:
 
 ```
 $ python3 -m xfl_dp --help
-usage: __main__.py [-h] [-v] rnum cnum tag limit
+usage: __main__.py [-h] [-n] [-v] rnum cnum tag limit
 
 Run XFEL post processing of cheetah data
 
