@@ -23,6 +23,7 @@ def main():
     parser.add_argument('cnum', type=int, help='cheetah number')
     parser.add_argument('tag', type=str, help='cheetah tag associated with the current run (written after a hyphen in the cheetah folder name)')
     parser.add_argument('limit', type=int, nargs='?', default=500, help='minimum ADU value to trim out black images')
+    parser.add_argumaent('outpath', type=str, nargs='?', default=os.path.dirname(os.path.dirname(__file__)), help='output folder location to write processed data')
     parser.add_argument('-n', '--normalize', action='store_true', help='normalize frame intensities')
     parser.add_argument('-v', '--verbosity', action='store_true', help='increase output verbosity')
     args = parser.parse_args()
