@@ -17,6 +17,7 @@ def add_data_to_dset(dset, data):
     dset.flush()
 
 def process_frame(frame, normalize):
+    frame[frame < 0] = 0
     if normalize:
         bg = frame[utils.bg_roi].sum().astype(np.float32)
         return utils.apply_agipd_geom(frame).astype(np.float32) / bg
