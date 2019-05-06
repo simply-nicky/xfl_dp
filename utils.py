@@ -4,7 +4,7 @@ from cfelpyutils.geometry_utils import apply_geometry_to_data
 
 basepath = "/gpfs/exfel/u/scratch/MID/201802/p002200/cheetah/hdf5/r{0:04d}-{2:s}/XFEL-r{0:04d}-c{1:02d}.{3:s}"
 userpath = "XFEL-r{0:04d}-c{1:02d}.{2:s}"
-outpath = "../hdf5/r{0:04d}-processed/XFEL-r{0:04d}-c{1:02d}-processed.{2:s}"
+outpath = "/hdf5/r{0:04d}-processed/XFEL-r{0:04d}-c{1:02d}-processed.{2:s}"
 datapath = "entry_1/instrument_1/detector_1/detector_corrected/data"
 trainpath = "/instrument/trainID"
 pulsepath = "/instrument/pulseID"
@@ -31,9 +31,9 @@ def make_output_dir(path):
     except OSError as e:
         if e.errno != errno.EEXIST: raise
 
-def output_path(rnum, cnum, ext):
-    abspath = os.path.abspath(os.path.join(os.path.dirname(__file__), outpath.format(rnum, cnum, ext)))
+def output_path(rnum, cnum, ext, output_folder=os.path.dirname(os.path.dirname(__file__))):
+    abspath = os.path.abspath(os.path.join(output_folder, outpath.format(rnum, cnum, ext)))
     if not os.path.isfile(abspath):
         return abspath
     else:
-        return output_path(rnum, cnum + 1, ext)
+        return output_path(rnum, cnum + 1, ext, output_folder)

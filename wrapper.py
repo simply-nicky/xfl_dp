@@ -1,12 +1,12 @@
 from __future__ import print_function
 from . import xfl_dp, utils
-import argparse
+import argparse, os
 
 class XFLData:
-    def __init__(self, rnum, cnum, tag):
+    def __init__(self, rnum, cnum, tag, output_folder=os.path.dirname(os.path.dirname(__file__))):
         self.cheetah_path = utils.get_path_to_data(rnum, cnum, tag, 'cxi', True)
         self.data_size = xfl_dp.get_data_size(rnum, cnum, tag, 'cxi', True)
-        self.output_path = utils.output_path(rnum, cnum, 'cxi')
+        self.output_path = utils.output_path(rnum, cnum, 'cxi', output_folder)
 
     def data(self, limit=500, normalize=True):
         return xfl_dp.data(self.cheetah_path, self.data_size, limit, normalize, True)
