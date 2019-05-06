@@ -3,8 +3,8 @@ from multiprocessing import cpu_count
 from functools import partial
 from . import utils
 
-def get_data_size(rnum, cnum, tag, ext, online):
-    f = h5py.File(utils.get_path_to_data(rnum, cnum, tag, ext, online), 'r')
+def get_data_size(cheetah_path):
+    f = h5py.File(cheetah_path, 'r')
     size = f[utils.datapath].shape[0]
     f.close()
     return size
@@ -24,7 +24,7 @@ def process_frame(frame, normalize):
     else:
         return utils.apply_agipd_geom(frame)
 
-def get_first_image(cheetah_path, lim, normalize, online):
+def get_first_image(cheetah_path, lim, normalize):
     file_handler = h5py.File(cheetah_path, 'r')
     pulse_ids = file_handler[utils.pulsepath]
     train_ids = file_handler[utils.trainpath]
@@ -37,7 +37,7 @@ def get_first_image(cheetah_path, lim, normalize, online):
     file_handler.close()
     return data[np.newaxis], np.array([tid]), np.array([pid]), idx + 1
 
-def data_chunk(start, stop, cheetah_path, lim, normalize, online):
+def data_chunk(start, stop, cheetah_path, lim, normalize):
     file_handler = h5py.File(cheetah_path, 'r')
     pulse_ids = file_handler[utils.pulsepath]
     train_ids = file_handler[utils.trainpath]
@@ -51,8 +51,8 @@ def data_chunk(start, stop, cheetah_path, lim, normalize, online):
             data.append(process_frame(frame, normalize))
     return np.array(data), np.array(tidslist), np.array(pidslist)
 
-def data(cheetah_path, data_size, lim=500, normalize=True, online=True):
-    worker = partial(data_chunk, cheetah_path=cheetah_path, lim=lim, normalize=normalize, online=online)
+def data(cheetah_path, data_size, lim=500, normalize=True):
+    worker = partial(data_chunk, cheetah_path=cheetah_path, lim=lim, normalize=normalize)
     nums = np.linspace(0, data_size, cpu_count() + 1).astype(int)
     datalist, tidslist, pidslist = [], [], []
     with concurrent.futures.ProcessPoolExecutor() as executor:
@@ -62,7 +62,7 @@ def data(cheetah_path, data_size, lim=500, normalize=True, online=True):
             pidslist.extend(pids)
     return np.array(datalist), np.array(tidslist), np.array(pidslist)
 
-def data_serial(cheetah_path, lim=500, normalize=True, online=True):
+def data_serial(cheetah_path, lim=500, normalize=True):
     file_handler = h5py.File(cheetah_path, 'r')
     pulse_ids = file_handler[utils.pulsepath]
     train_ids = file_handler[utils.trainpath]
@@ -76,9 +76,9 @@ def data_serial(cheetah_path, lim=500, normalize=True, online=True):
     file_handler.close()
     return np.array(data), np.array(tidslist), np.array(pidslist)
 
-def write_data(cheetah_path, output_path, data_size, lim=500, normalize=True, online=True):
+def write_data(cheetah_path, output_path, data_size, lim=500, normalize=True):
     utils.make_output_dir(output_path)
-    frame, tid, pid, idx = get_first_image(cheetah_path, lim, normalize, online)
+    frame, tid, pid, idx = get_first_image(cheetah_path, lim, normalize)
     outfile = h5py.File(output_path, 'w', libver='latest')
     arggroup = outfile.create_group('arguments')
     arggroup.create_dataset('cheetah path', data=np.string_(cheetah_path))
@@ -89,7 +89,7 @@ def write_data(cheetah_path, output_path, data_size, lim=500, normalize=True, on
     trainset = datagroup.create_dataset('trainID', chunks=True, maxshape=(None,), data=tid, dtype=np.uint32)
     pulseset = datagroup.create_dataset('pulseID', chunks=True, maxshape=(None,), data=pid, dtype=np.uint32)
     outfile.swmr_mode = True
-    worker = partial(data_chunk, cheetah_path=cheetah_path, lim=lim, normalize=normalize, online=online)
+    worker = partial(data_chunk, cheetah_path=cheetah_path, lim=lim, normalize=normalize)
     nums = np.linspace(idx, data_size, cpu_count() + 1).astype(int)
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for data, tids, pids in executor.map(utils.worker_star(worker), zip(nums[:-1], nums[1:])):

@@ -18,7 +18,7 @@ You can import the package or use it as a command line tool:
 
 ```
 $ python3 -m xfl_dp --help
-usage: __main__.py [-h] [-n] [-v] rnum cnum tag limit
+usage: __main__.py [-h] [-n] [-v] rnum cnum tag [limit] [outpath]
 
 Run XFEL post processing of cheetah data
 
@@ -28,6 +28,7 @@ positional arguments:
   tag              cheetah tag associated with the current run (written after
                    a hyphen in the cheetah folder name)
   limit            minimum ADU value to trim out black images
+  outpath          output folder location to write processed data
 
 optional arguments:
   -h, --help       show this help message and exit
