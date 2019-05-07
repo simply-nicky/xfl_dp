@@ -4,7 +4,7 @@ from cfelpyutils.geometry_utils import apply_geometry_to_data
 
 basepath = "/gpfs/exfel/u/scratch/MID/201802/p002200/cheetah/hdf5/r{0:04d}-{2:s}/XFEL-r{0:04d}-c{1:02d}.{3:s}"
 userpath = "XFEL-r{0:04d}-c{1:02d}.{2:s}"
-outpath = "hdf5/r{0:04d}-processed/XFEL-r{0:04d}-c{1:02d}-processed.{2:s}"
+outpath = "hdf5/r{0:04d}-processed/XFEL-r{0:04d}-c{1:02d}.{2:s}"
 datapath = "entry_1/instrument_1/detector_1/detector_corrected/data"
 trainpath = "/instrument/trainID"
 pulsepath = "/instrument/pulseID"
