@@ -25,11 +25,11 @@ def main():
     parser.add_argument('limit', type=int, nargs='?', default=20000, help='minimum ADU value to trim out black images')
     parser.add_argument('outpath', type=str, nargs='?', default=os.path.dirname(os.path.dirname(__file__)), help='output folder location to write processed data')
     parser.add_argument('-n', '--normalize', action='store_true', help='normalize frame intensities')
-    parser.add_argument('-o', '--online', action='store_true', help='online - cheetah data in Maxwell cluster')
+    parser.add_argument('-off', '--offline', action='store_true', help='offline - run not in Maxwell cluster for debug purposes')
     parser.add_argument('-v', '--verbosity', action='store_true', help='increase output verbosity')
     args = parser.parse_args()
 
-    xfl_data = XFLData(args.rnum, args.cnum, args.tag, args.outpath, args.online)
+    xfl_data = XFLData(args.rnum, args.cnum, args.tag, args.outpath, not args.offline)
     if args.verbosity:
         print("List of typed arguments:")
         for key, val in vars(args).items():
