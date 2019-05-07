@@ -1,5 +1,4 @@
 import numpy as np, h5py, concurrent.futures, argparse
-from multiprocessing import cpu_count
 from functools import partial
 from . import utils
 
@@ -51,9 +50,9 @@ def data_chunk(start, stop, cheetah_path, lim, normalize):
             data.append(process_frame(frame, normalize))
     return np.array(data), np.array(tidslist), np.array(pidslist)
 
-def data(cheetah_path, data_size, lim=500, normalize=True):
+def data(cheetah_path, data_size, lim=20000, normalize=True):
     worker = partial(data_chunk, cheetah_path=cheetah_path, lim=lim, normalize=normalize)
-    nums = np.linspace(0, data_size, cpu_count() + 1).astype(int)
+    nums = utils.chunkify(0, data_size)
     datalist, tidslist, pidslist = [], [], []
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for data, pids, tids in executor.map(utils.worker_star(worker), zip(nums[:-1], nums[1:])):
@@ -62,7 +61,7 @@ def data(cheetah_path, data_size, lim=500, normalize=True):
             pidslist.extend(pids)
     return np.array(datalist), np.array(tidslist), np.array(pidslist)
 
-def data_serial(cheetah_path, lim=500, normalize=True):
+def data_serial(cheetah_path, lim=20000, normalize=True):
     file_handler = h5py.File(cheetah_path, 'r')
     pulse_ids = file_handler[utils.pulsepath]
     train_ids = file_handler[utils.trainpath]
@@ -76,7 +75,7 @@ def data_serial(cheetah_path, lim=500, normalize=True):
     file_handler.close()
     return np.array(data), np.array(tidslist), np.array(pidslist)
 
-def write_data(cheetah_path, output_path, data_size, lim=500, normalize=True):
+def write_data(cheetah_path, output_path, data_size, lim=20000, normalize=True):
     utils.make_output_dir(output_path)
     frame, tid, pid, idx = get_first_image(cheetah_path, lim, normalize)
     outfile = h5py.File(output_path, 'w', libver='latest')
@@ -90,7 +89,7 @@ def write_data(cheetah_path, output_path, data_size, lim=500, normalize=True):
     pulseset = datagroup.create_dataset('pulseID', chunks=True, maxshape=(None,), data=pid, dtype=np.uint32)
     outfile.swmr_mode = True
     worker = partial(data_chunk, cheetah_path=cheetah_path, lim=lim, normalize=normalize)
-    nums = np.linspace(idx, data_size, cpu_count() + 1).astype(int)
+    nums = utils.chunkify(idx, data_size)
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for data, tids, pids in executor.map(utils.worker_star(worker), zip(nums[:-1], nums[1:])):
             add_data_to_dset(dataset, data)
