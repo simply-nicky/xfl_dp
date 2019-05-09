@@ -1,6 +1,7 @@
 import numpy as np, h5py, concurrent.futures, argparse
 from functools import partial
 from . import utils
+from scipy.ndimage.filters import median_filter
 
 def get_data_size(cheetah_path):
     f = h5py.File(cheetah_path, 'r')
@@ -15,15 +16,21 @@ def add_data_to_dset(dset, data):
     dset[dsetshape[0]:] = data
     dset.flush()
 
-def process_frame(frame, normalize):
+def process_frame(frame, medfilt, normalize):
     frame[frame < 0] = 0
     if normalize:
         bg = frame[utils.bg_roi].sum().astype(np.float32)
-        return utils.apply_agipd_geom(frame).astype(np.float32) / bg
+        if medfilt:
+            return median_filter(utils.apply_agipd_geom(frame).astype(np.float32) / bg, 3)
+        else:
+            return utils.apply_agipd_geom(frame).astype(np.float32) / bg
     else:
-        return utils.apply_agipd_geom(frame)
+        if medfilt:
+            return median_filter(utils.apply_agipd_geom(frame).astype(np.int32), 3)
+        else:
+            return utils.apply_agipd_geom(frame).astype(np.int32)
 
-def get_first_image(cheetah_path, lim, normalize):
+def get_first_image(cheetah_path, lim, medfilt, normalize):
     file_handler = h5py.File(cheetah_path, 'r')
     pulse_ids = file_handler[utils.pulsepath]
     train_ids = file_handler[utils.trainpath]
@@ -32,11 +39,11 @@ def get_first_image(cheetah_path, lim, normalize):
     while raw_data[idx].max() < lim: idx += 1
     else:
         pid, tid = pulse_ids[idx], train_ids[idx]
-        data = process_frame(raw_data[idx], normalize)
+        data = process_frame(raw_data[idx], medfilt, normalize)
     file_handler.close()
     return data[np.newaxis], np.array([tid]), np.array([pid]), idx + 1
 
-def data_chunk(start, stop, cheetah_path, lim, normalize):
+def data_chunk(start, stop, cheetah_path, lim, medfilt, normalize):
     file_handler = h5py.File(cheetah_path, 'r')
     pulse_ids = file_handler[utils.pulsepath]
     train_ids = file_handler[utils.trainpath]
@@ -47,11 +54,11 @@ def data_chunk(start, stop, cheetah_path, lim, normalize):
         if frame.max() > lim:
             pidslist.append(pulse_ids[idx])
             tidslist.append(train_ids[idx])
-            data.append(process_frame(frame, normalize))
+            data.append(process_frame(frame, medfilt, normalize))
     return np.array(data), np.array(tidslist), np.array(pidslist)
 
-def data(cheetah_path, data_size, lim=20000, normalize=True):
-    worker = partial(data_chunk, cheetah_path=cheetah_path, lim=lim, normalize=normalize)
+def data(cheetah_path, data_size, lim=20000, medfilt=False, normalize=False):
+    worker = partial(data_chunk, cheetah_path=cheetah_path, lim=lim, medfilt=medfilt, normalize=normalize)
     nums = utils.chunkify(0, data_size)
     datalist, tidslist, pidslist = [], [], []
     with concurrent.futures.ProcessPoolExecutor() as executor:
@@ -61,7 +68,7 @@ def data(cheetah_path, data_size, lim=20000, normalize=True):
             pidslist.extend(pids)
     return np.array(datalist), np.array(tidslist), np.array(pidslist)
 
-def data_serial(cheetah_path, lim=20000, normalize=True):
+def data_serial(cheetah_path, lim=20000, medfilt=False, normalize=False):
     file_handler = h5py.File(cheetah_path, 'r')
     pulse_ids = file_handler[utils.pulsepath]
     train_ids = file_handler[utils.trainpath]
@@ -71,24 +78,25 @@ def data_serial(cheetah_path, lim=20000, normalize=True):
         if frame.max() > lim:
             pidslist.append(pidx)
             tidslist.append(tidx)
-            data.append(process_frame(frame, normalize))
+            data.append(process_frame(frame, medfilt, normalize))
     file_handler.close()
     return np.array(data), np.array(tidslist), np.array(pidslist)
 
-def write_data(cheetah_path, output_path, data_size, lim=20000, normalize=True):
+def write_data(cheetah_path, output_path, data_size, lim=20000, medfilt=False, normalize=False):
     utils.make_output_dir(output_path)
-    frame, tid, pid, idx = get_first_image(cheetah_path, lim, normalize)
+    frame, tid, pid, idx = get_first_image(cheetah_path, lim, medfilt, normalize)
     outfile = h5py.File(output_path, 'w', libver='latest')
     arggroup = outfile.create_group('arguments')
     arggroup.create_dataset('cheetah path', data=np.string_(cheetah_path))
     arggroup.create_dataset('trimming limit', data=lim)
+    arggroup.create_dataset('medfilter', data=medfilt)
     arggroup.create_dataset('normalize', data=normalize)
     datagroup = outfile.create_group('data')
-    dataset = datagroup.create_dataset('data', chunks=frame.shape, maxshape=(None,) + frame.shape[1:], data=frame, dtype=np.float32)
-    trainset = datagroup.create_dataset('trainID', chunks=True, maxshape=(None,), data=tid, dtype=np.uint32)
-    pulseset = datagroup.create_dataset('pulseID', chunks=True, maxshape=(None,), data=pid, dtype=np.uint32)
+    dataset = datagroup.create_dataset('data', chunks=frame.shape, maxshape=(None,) + frame.shape[1:], data=frame, compression='gzip')
+    trainset = datagroup.create_dataset('trainID', chunks=True, maxshape=(None,), data=tid)
+    pulseset = datagroup.create_dataset('pulseID', chunks=True, maxshape=(None,), data=pid)
     outfile.swmr_mode = True
-    worker = partial(data_chunk, cheetah_path=cheetah_path, lim=lim, normalize=normalize)
+    worker = partial(data_chunk, cheetah_path=cheetah_path, lim=lim, medfilt=medfilt, normalize=normalize)
     nums = utils.chunkify(idx, data_size)
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for data, tids, pids in executor.map(utils.worker_star(worker), zip(nums[:-1], nums[1:])):
