@@ -8,14 +8,14 @@ class XFLData:
         self.data_size = xfl_dp.get_data_size(self.cheetah_path)
         self.output_path = utils.output_path(rnum, cnum, 'cxi', output_folder)
 
-    def data(self, limit=20000, medfilt=False, normalize=False):
-        return xfl_dp.data(self.cheetah_path, self.data_size, limit, medfilt, normalize)
+    def data(self, limit=20000):
+        return xfl_dp.data(self.cheetah_path, self.data_size, limit)
 
-    def data_serial(self, limit=20000, medfilt=False, normalize=False):
-        return xfl_dp.data_serial(self.cheetah_path, limit, normalize)
+    def splitted_data(self, pids, limit=20000):
+        return xfl_dp.splitted_data(self.cheetah_path, self.data_size, pids, limit)
 
-    def write(self, limit=20000, medfilt=False, normalize=False):
-        xfl_dp.write_data(self.cheetah_path, self.output_path, self.data_size, limit, medfilt, normalize)
+    def write(self, limit=20000):
+        xfl_dp.write_data(self.cheetah_path, self.output_path, self.data_size, limit)
 
 def main():
     parser = argparse.ArgumentParser(description='Run XFEL post processing of cheetah data')
@@ -24,8 +24,6 @@ def main():
     parser.add_argument('tag', type=str, help='cheetah tag associated with the current run (written after a hyphen in the cheetah folder name)')
     parser.add_argument('limit', type=int, nargs='?', default=20000, help='minimum ADU value to trim out black images')
     parser.add_argument('outdir', type=str, nargs='?', default=os.path.dirname(os.path.dirname(__file__)), help='output folder location to write processed data')
-    parser.add_argument('-n', '--normalize', action='store_true', help='normalize frame intensities')
-    parser.add_argument('-f', '--medfilt', action='store_true', help='apply median filter')
     parser.add_argument('-off', '--offline', action='store_true', help='offline - run not in Maxwell cluster for debug purposes')
     parser.add_argument('-v', '--verbosity', action='store_true', help='increase output verbosity')
     args = parser.parse_args()
@@ -37,7 +35,7 @@ def main():
             print(key, val, sep=' = ')
         print("cheetah data is located in %s" % xfl_data.cheetah_path)
         print("Writing data to folder: %s" % xfl_data.output_path)
-        xfl_data.write(args.limit, args.medfilt, args.normalize)
+        xfl_data.write(args.limit)
         print("Done")
     else:
-        xfl_data.write(args.limit, args.medfilt, args.normalize)
+        xfl_data.write(args.limit)
