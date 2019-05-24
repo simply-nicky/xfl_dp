@@ -16,7 +16,6 @@ def add_data_to_dset(dset, data):
     dset.flush()
 
 def process_frame(frame):
-    # frame[frame < 0] = 0
     return utils.apply_agipd_geom(frame).astype(np.int32)
 
 def get_first_image(cheetah_path, lim):

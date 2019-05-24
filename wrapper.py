@@ -2,7 +2,7 @@ from __future__ import print_function
 from . import xfl_dp, utils
 import argparse, os
 
-class XFLData:
+class XFLData(object):
     def __init__(self, rnum, cnum, tag, output_folder=os.path.dirname(os.path.dirname(__file__)), online=True):
         self.cheetah_path = utils.get_path_to_data(rnum, cnum, tag, 'cxi', online)
         self.data_size = xfl_dp.get_data_size(self.cheetah_path)
