@@ -1,6 +1,7 @@
 import os, errno, numpy as np
 from cfelpyutils.crystfel_utils import load_crystfel_geometry
 from cfelpyutils.geometry_utils import apply_geometry_to_data
+from multiprocessing import cpu_count
 
 basepath = "/gpfs/exfel/u/scratch/MID/201802/p002200/cheetah/hdf5/r{0:04d}-{2:s}/XFEL-r{0:04d}-c{1:02d}.{3:s}"
 userpath = "cheetah/XFEL-r{0:04d}-c{1:02d}.{2:s}"
@@ -8,8 +9,10 @@ outpath = "hdf5/r{0:04d}-processed/XFEL-r{0:04d}-c{1:02d}.{2:s}"
 datapath = "entry_1/instrument_1/detector_1/detector_corrected/data"
 trainpath = "/instrument/trainID"
 pulsepath = "/instrument/pulseID"
+workerpath = os.path.join(os.path.dirname(__file__), '../mpi_worker.py')
 bg_roi = (slice(5000), slice(None))
 thread_size = 100
+thread_num = cpu_count() // 2
 
 AGIPD_geom = load_crystfel_geometry(os.path.join(os.path.dirname(__file__), "agipd.geom"))
 
@@ -22,7 +25,7 @@ class worker_star(object):
 
 def chunkify(start, end):
     thread_num = (end - start) // thread_size + 1
-    return np.linspace(start, end, thread_num + 1).astype(int)
+    return np.linspace(start, end, thread_num + 1).astype(int).tolist()
 
 def get_path_to_data(rnum, cnum, tag, ext, online):
     return basepath.format(rnum, cnum, tag, ext) if online else userpath.format(rnum, cnum, ext)

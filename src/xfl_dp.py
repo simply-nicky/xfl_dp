@@ -1,4 +1,5 @@
-import numpy as np, h5py, concurrent.futures, argparse
+import numpy as np, h5py, argparse, concurrent.futures, sys
+from mpi4py import MPI
 from functools import partial
 from . import utils
 
@@ -42,7 +43,7 @@ def data_chunk(start, stop, cheetah_path, lim):
             pidslist.append(pulse_ids[idx])
             tidslist.append(train_ids[idx])
             data.append(process_frame(raw_data[idx]))
-    return np.array(data), np.array(tidslist), np.array(pidslist)
+    return data, tidslist, pidslist
 
 def data(cheetah_path, data_size, lim=20000):
     worker = partial(data_chunk, cheetah_path=cheetah_path, lim=lim)
@@ -54,6 +55,21 @@ def data(cheetah_path, data_size, lim=20000):
             tidslist.extend(tids)
             pidslist.extend(pids)
     return np.array(datalist), np.array(tidslist), np.array(pidslist)
+
+def data_mpi(cheetah_path, data_size, n_procs, lim=20000):
+    nums = utils.chunkify(0, data_size)
+    task_list = list(zip(nums[:-1], nums[1:])) + ([StopIteration] * (n_procs - 1))
+    comm = MPI.COMM_WORLD.Spawn(sys.executable, args=[utils.workerpath, cheetah_path, str(lim)], maxprocs=n_procs - 1)
+    status = MPI.Status()
+    for counter, task in enumerate(task_list):
+        comm.recv(source=MPI.ANY_SOURCE, status=status)
+        comm.send(obj=task, dest=status.Get_source())
+        percent = ((counter + 1) * 100) // len(task_list)
+        print('Progress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent))
+        sys.stdout.flush()
+    data = comm.gather(None, root=MPI.ROOT)
+    comm.Disconnect()
+    return data
 
 def data_serial(cheetah_path, lim=20000):
     file_handler = h5py.File(cheetah_path, 'r')
@@ -69,10 +85,21 @@ def data_serial(cheetah_path, lim=20000):
     file_handler.close()
     return np.array(data), np.array(tidslist), np.array(pidslist)
 
+def write_args(pids, tids, cheetah_path, output_path, lim):
+    utils.make_output_dir(output_path)
+    outfile = h5py.File(output_path, 'w')
+    arggroup = outfile.create_group('arguments')
+    arggroup.create_dataset('cheetah path', data=np.string_(cheetah_path))
+    arggroup.create_dataset('trimming limit', data=lim)
+    datagroup = outfile.create_group('data')
+    datagroup.create_dataset('trainID', data=tids)
+    datagroup.create_dataset('pulseID', data=pids)
+    outfile.close()
+
 def write_data(cheetah_path, output_path, data_size, lim=20000):
     utils.make_output_dir(output_path)
     frame, tid, pid, idx = get_first_image(cheetah_path, lim)
-    outfile = h5py.File(output_path, 'w', libver='latest')
+    outfile = h5py.File(output_path, 'w', driver='mpio', comm=MPI.COMM_WORLD)
     arggroup = outfile.create_group('arguments')
     arggroup.create_dataset('cheetah path', data=np.string_(cheetah_path))
     arggroup.create_dataset('trimming limit', data=lim)
@@ -88,6 +115,17 @@ def write_data(cheetah_path, output_path, data_size, lim=20000):
             add_data_to_dset(dataset, data)
             add_data_to_dset(trainset, tids)
             add_data_to_dset(pulseset, pids)
+    outfile.close()
+
+def write_mpi(data, pids, tids, cheetah_path, output_path, lim=20000):
+    write_args(pids, tids, cheetah_path, output_path, lim)
+    rank = MPI.COMM_WORLD.rank
+    size = MPI.COMM_WORLD.size
+    outfile = h5py.File(output_path, 'r+', driver='mpio', comm=MPI.COMM_WORLD)
+    dataset = outfile.create_dataset('data/data', data.shape, dtype=data.dtype)
+    start = int(data.shape[0] / size * rank)
+    stop = int(data.shape[0] / size * (rank + 1))
+    dataset[start:stop] = data[start:stop]
     outfile.close()
 
 def splitted_data_chunk(start, stop, cheetah_path, pids, lim):
