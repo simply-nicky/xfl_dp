@@ -16,7 +16,7 @@ for task in iter(lambda: comm.sendrecv(None, dest=0, source=0), StopIteration):
     _data.extend(_data_chunk)
     # _data.extend([np.arange(num) for num in range(_start, _stop)])
 
-_data = np.array(_data)
+_data = np.array(_data, dtype=np.float_)
 # print(_data.shape)
 comm.gather(_data, root=0)
 comm.Disconnect()
