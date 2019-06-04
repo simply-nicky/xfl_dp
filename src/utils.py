@@ -78,6 +78,7 @@ class MPIPool(object):
             self.comm.recv(source=MPI.ANY_SOURCE, status=status)
             self.comm.send(obj=task, dest=status.Get_source())
             queue.append(status.Get_source())
+        print('Gathering to root')
         pool_size = sum(self.comm.gather(None, root=MPI.ROOT))
         print('Starting reading')
         self._progress_bar(pool_size)
