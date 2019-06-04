@@ -12,7 +12,7 @@ pulsepath = "/instrument/pulseID"
 workerwritepath = os.path.join(os.path.dirname(__file__), '../mpi_worker_write.py')
 workerreadpath = os.path.join(os.path.dirname(__file__), '../mpi_worker_read.py')
 bg_roi = (slice(5000), slice(None))
-thread_size = 50
+thread_size = 100
 
 AGIPD_geom = load_crystfel_geometry(os.path.join(os.path.dirname(__file__), "agipd.geom"))
 
