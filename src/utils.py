@@ -79,6 +79,7 @@ class MPIPool(object):
             self.comm.send(obj=task, dest=status.Get_source())
             queue.append(status.Get_source())
         pool_size = sum(self.comm.gather(None, root=MPI.ROOT))
+        print('Starting reading')
         self._progress_bar(pool_size)
         return queue, pool_size
 
