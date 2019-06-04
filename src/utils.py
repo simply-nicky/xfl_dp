@@ -60,6 +60,7 @@ def output_path(rnum, cnum, ext, output_folder=os.path.dirname(os.path.dirname(_
 class MPIPool(object):
     def __init__(self, workerpath, args, n_procs):
         self.n_procs, self.n_workers = n_procs, n_procs - 1
+        self.time = MPI.Wtime()
         self.comm = MPI.COMM_SELF.Spawn(sys.executable, args=[workerpath] + args, maxprocs=self.n_workers)
 
     def _progress_bar(self, pool_size):
@@ -100,3 +101,4 @@ class MPIPool(object):
         print('Writing data...')
         self._progress_bar(pool_size)
         self.comm.Disconnect()
+        print('Elapsed time: {:.2f}s'.format(MPI.Wtime() - self.time))
