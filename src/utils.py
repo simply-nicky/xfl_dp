@@ -65,10 +65,12 @@ class MPIPool(object):
         self.comm = MPI.COMM_SELF.Spawn(sys.executable, args=[workerpath] + args, maxprocs=self.n_workers)
 
     def _progress_bar(self, pool_size, tag):
+        status = MPI.Status()
         for counter in range(pool_size):
             percent = (counter * 100) // pool_size
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
-            self.comm.recv(source=MPI.ANY_SOURCE, tag=tag)
+            self.comm.recv(source=MPI.ANY_SOURCE, status=status, tag=tag)
+            print('ROOT: received in loop from {}'.format(status.Get_source()))
         else:
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
 
