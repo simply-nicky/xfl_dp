@@ -75,10 +75,11 @@ class MPIPool(object):
             self.comm.send(obj=task, dest=status.Get_source())
             queue.append(status.Get_source())
         pool_size = sum([self.comm.recv(source=rank, tag=1) for rank in queue])
+        self.comm.Barrier()
         for counter in range(pool_size):
             percent = (counter * 100) // pool_size
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
-            self.comm.recv(source=MPI.ANY_SOURCE, status=status, tag=2)
+            self.comm.recv(source=MPI.ANY_SOURCE, tag=2)
             print('ROOT received {}'.format(counter))
         else:
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
@@ -99,8 +100,7 @@ class MPIPool(object):
         for counter in range(pool_size):
             percent = (counter * 100) // pool_size
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
-            self.comm.recv(source=MPI.ANY_SOURCE, status=status, tag=2)
-            print('ROOT received {}'.format(counter))
+            self.comm.recv(source=MPI.ANY_SOURCE, tag=2)
         else:
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
         data_size = 0
@@ -113,8 +113,7 @@ class MPIPool(object):
         for counter in range(pool_size):
             percent = (counter * 100) // pool_size
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
-            self.comm.recv(source=MPI.ANY_SOURCE, status=status, tag=3)
-            print('ROOT received {}'.format(counter))
+            self.comm.recv(source=MPI.ANY_SOURCE, tag=3)
         else:
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
         self.shutdown()
