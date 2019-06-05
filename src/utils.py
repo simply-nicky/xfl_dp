@@ -68,28 +68,23 @@ class MPIPool(object):
         for counter in range(pool_size):
             percent = (counter * 100) // pool_size
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
-            self.comm.Recv(np.zeros(1), source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG)
+            self.comm.recv(source=MPI.ANY_SOURCE, tag=tag)
             print('ROOT received {}'.format(counter))
         else:
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
-
-    def _map_setup(self, task_list):
-        assert len(task_list) == self.n_workers, 'wrong task_list size'
-        status, queue = MPI.Status(), []
-        for task in task_list:
-            self.comm.recv(source=MPI.ANY_SOURCE, status=status, tag=0)
-            self.comm.send(obj=task, dest=status.Get_source())
-            queue.append(status.Get_source())
-        pool_size = sum([self.comm.recv(source=rank, tag=1) for rank in queue])
-        self._progress_bar(pool_size, 2)
-        return queue, pool_size
 
     def shutdown(self):
         self.comm.Disconnect()
         print('Elapsed time: {:.2f}s'.format(MPI.Wtime() - self.time))
 
     def read_map(self, task_list):
-        queue = self._map_setup(task_list)[0]
+        status, queue = MPI.Status(), []
+        for task in task_list[:self.n_workers]:
+            self.comm.recv(source=MPI.ANY_SOURCE, status=status, tag=0)
+            self.comm.send(obj=task, dest=status.Get_source())
+            queue.append(status.Get_source())
+        pool_size = sum([self.comm.recv(source=rank, tag=1) for rank in queue])
+        self._progress_bar(pool_size, 2)
         data_list, tids_list, pids_list = [], [], []
         for rank in queue:
             data, tids, pids = self.comm.recv(source=rank, tag=3)
@@ -98,7 +93,13 @@ class MPIPool(object):
         return data_list, tids_list, pids_list
 
     def write_map(self, task_list):
-        queue, pool_size = self._map_setup(task_list)
+        status, queue = MPI.Status(), []
+        for task in task_list[:self.n_workers]:
+            self.comm.recv(source=MPI.ANY_SOURCE, status=status, tag=0)
+            self.comm.send(obj=task, dest=status.Get_source())
+            queue.append(status.Get_source())
+        pool_size = sum([self.comm.recv(source=rank, tag=1) for rank in queue])
+        self._progress_bar(pool_size, 2)
         data_size = 0
         for rank in queue:
             chunk_size = self.comm.sendrecv(data_size, dest=rank, source=rank)
