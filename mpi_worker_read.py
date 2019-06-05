@@ -15,13 +15,10 @@ start_read, stop_read = comm.recv(source=0)
 data_list, tids_list, pids_list = [], [], []
 ranges = chunkify(start_read, stop_read)
 comm.send(len(ranges), dest=0, tag=1)
-print('{} sent'.format(comm.Get_rank()))
 for start, stop in ranges:
     _data_chunk, _tids_chunk, _pids_chunk = data_chunk(start, stop, cheetah_path, lim)
     data_list.append(_data_chunk); tids_list.append(_tids_chunk); pids_list.append(_pids_chunk)
-    print('{} sending'.format(comm.Get_rank()))
     comm.send(obj=None, dest=0, tag=2)
-    print('{} sent'.format(comm.Get_rank()))
 data = np.concatenate(data_list); tids = np.concatenate(tids_list); pids = np.concatenate(pids_list)
 comm.send(obj=(data, tids, pids), dest=0, tag=3)
 

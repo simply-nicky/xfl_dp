@@ -74,9 +74,7 @@ class MPIPool(object):
             self.comm.recv(source=MPI.ANY_SOURCE, status=status, tag=0)
             self.comm.send(obj=task, dest=status.Get_source())
             queue.append(status.Get_source())
-        print('queue: {}'.format(queue))
-        pool_size = sum([self.comm.recv(source=MPI.ANY_SOURCE, tag=1) for rank in queue])
-        print('pool size {}'.format(pool_size))
+        pool_size = sum([self.comm.recv(source=rank, tag=1) for rank in queue])
         for counter in range(pool_size):
             percent = (counter * 100) // pool_size
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
