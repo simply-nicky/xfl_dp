@@ -12,7 +12,7 @@ except:
 
 print('starting')
 start_read, stop_read = comm.sendrecv(None, dest=0, source=0)
-print('{d} received'.format(comm.Get_rank()))
+print('{:d} received'.format(comm.Get_rank()))
 data_list, tids_list, pids_list = [], [], []
 ranges = chunkify(start_read, stop_read)
 comm.gather(len(ranges), root=0)
