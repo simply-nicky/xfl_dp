@@ -77,6 +77,7 @@ class MPIPool(object):
         status, queue = MPI.Status(), []
         for task in task_list:
             self.comm.recv(source=MPI.ANY_SOURCE, status=status)
+            print('ROOT: received from {}'.format(status.Get_source()))
             self.comm.send(obj=task, dest=status.Get_source())
             queue.append(status.Get_source())
         print('ROOT: loop ended')
