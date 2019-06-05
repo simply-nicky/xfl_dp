@@ -28,6 +28,7 @@ def get_first_image(cheetah_path, lim):
 
 def data_chunk(start, stop, cheetah_path, lim):
     file_handler = h5py.File(cheetah_path, 'r')
+    print('file opened')
     pulse_ids = file_handler[utils.pulsepath]
     train_ids = file_handler[utils.trainpath]
     raw_data = file_handler[utils.datapath]
