@@ -15,6 +15,7 @@ start_read, stop_read = comm.recv(source=0)
 data_list, tids_list, pids_list = [], [], []
 ranges = chunkify(start_read, stop_read)
 comm.send(len(ranges), dest=0, tag=1)
+print('{} sent'.format(comm.Get_rank()))
 comm.Barrier()
 for start, stop in ranges:
     _data_chunk, _tids_chunk, _pids_chunk = data_chunk(start, stop, cheetah_path, lim)
