@@ -68,14 +68,13 @@ class MPIPool(object):
         for counter in range(pool_size):
             percent = (counter * 100) // pool_size
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
-            self.comm.recv(source=MPI.ANY_SOURCE)
+            self.comm.recv(source=MPI.ANY_SOURCE, tag=0)
         else:
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
 
     def _map_setup(self, task_list):
         assert len(task_list) == self.n_workers, 'wrong task_list size'
         status, queue = MPI.Status(), []
-        print('ranks: {}'.format(self.comm.Get_rank()))
         for task in task_list:
             self.comm.recv(source=MPI.ANY_SOURCE, status=status)
             print('ROOT: received from {}'.format(status.Get_source()))
@@ -83,6 +82,7 @@ class MPIPool(object):
             queue.append(status.Get_source())
         print('ROOT: loop ended')
         pool_size = sum(self.comm.gather(None, root=MPI.ROOT))
+        print('ROOT: gathered')
         self._progress_bar(pool_size)
         return queue, pool_size
 
@@ -93,9 +93,8 @@ class MPIPool(object):
     def read_map(self, task_list):
         queue = self._map_setup(task_list)[0]
         data_list, tids_list, pids_list = [], [], []
-        self.comm.Barrier()
         for rank in queue:
-            data, tids, pids = self.comm.recv(source=rank)
+            data, tids, pids = self.comm.recv(source=rank, tag=1)
             data_list.append(data); tids_list.append(tids); pids_list.append(pids)
         self.shutdown()
         return data_list, tids_list, pids_list
