@@ -64,11 +64,11 @@ class MPIPool(object):
         self.time = MPI.Wtime()
         self.comm = MPI.COMM_SELF.Spawn(sys.executable, args=[workerpath] + args, maxprocs=self.n_workers)
 
-    def _progress_bar(self, pool_size):
+    def _progress_bar(self, pool_size, tag):
         for counter in range(pool_size):
             percent = (counter * 100) // pool_size
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
-            self.comm.recv(source=MPI.ANY_SOURCE, tag=0)
+            self.comm.recv(source=MPI.ANY_SOURCE, tag=tag)
         else:
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
 
@@ -76,14 +76,14 @@ class MPIPool(object):
         assert len(task_list) == self.n_workers, 'wrong task_list size'
         status, queue = MPI.Status(), []
         for task in task_list:
-            self.comm.recv(source=MPI.ANY_SOURCE, status=status)
+            self.comm.recv(source=MPI.ANY_SOURCE, status=status, tag=0)
             print('ROOT: received from {}'.format(status.Get_source()))
             self.comm.send(obj=task, dest=status.Get_source())
             queue.append(status.Get_source())
         print('ROOT: loop ended')
-        pool_size = sum(self.comm.gather(None, root=MPI.ROOT))
+        pool_size = sum([self.comm.recv(source=rank, tag=1) for rank in queue])
         print('ROOT: gathered')
-        self._progress_bar(pool_size)
+        self._progress_bar(pool_size, 2)
         return queue, pool_size
 
     def shutdown(self):
@@ -94,7 +94,7 @@ class MPIPool(object):
         queue = self._map_setup(task_list)[0]
         data_list, tids_list, pids_list = [], [], []
         for rank in queue:
-            data, tids, pids = self.comm.recv(source=rank, tag=1)
+            data, tids, pids = self.comm.recv(source=rank, tag=3)
             data_list.append(data); tids_list.append(tids); pids_list.append(pids)
         self.shutdown()
         return data_list, tids_list, pids_list
