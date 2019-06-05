@@ -11,14 +11,15 @@ try:
 except:
     raise ValueError('Could not connect to parent, wrong arguments')
 
-start_read, stop_read = comm.sendrecv(None, dest=0, source=0)
+comm.send(obj=None, dest=0, tag=0)
+start_read, stop_read = comm.recv(source=0)
 data_list, tids_list, pids_list = [], [], []
 ranges = chunkify(start_read, stop_read)
-comm.gather(len(ranges), root=0)
+comm.send(len(ranges), dest=0, tag=1)
 for start, stop in ranges:
     _data_chunk, _tids_chunk, _pids_chunk = data_chunk(start, stop, cheetah_path, lim)
     data_list.append(_data_chunk); tids_list.append(_tids_chunk); pids_list.append(_pids_chunk)
-    comm.send(obj=None, dest=0)
+    comm.send(obj=None, dest=0, tag=2)
 start_write = comm.recv(source=0)
 comm.send(sum([tids.size for tids in tids_list]), dest=0)
 data_size = comm.bcast(None, root=0)
@@ -37,6 +38,6 @@ for data, tids, pids in zip(data_list, tids_list, pids_list):
     with pulseset.collective:
         pulseset[start_write:start_write + tids.size] = pids
     start_write += tids.size
-    comm.send(None, dest=0)
+    comm.send(obj=None, dest=0, tag=3)
 outfile.close()
 comm.Disconnect()

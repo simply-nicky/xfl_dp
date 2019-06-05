@@ -83,6 +83,7 @@ class MPIPool(object):
         print('ROOT: loop ended')
         pool_size = sum([self.comm.recv(source=rank, tag=1) for rank in queue])
         print('ROOT: gathered')
+        print('pool_size: {}'.format(pool_size))
         self._progress_bar(pool_size, 2)
         return queue, pool_size
 
@@ -108,5 +109,5 @@ class MPIPool(object):
         self.comm.bcast(obj=data_size, root=MPI.ROOT)
         self.comm.Barrier()
         print('Writing data...')
-        self._progress_bar(pool_size)
+        self._progress_bar(pool_size, 3)
         self.shutdown()
