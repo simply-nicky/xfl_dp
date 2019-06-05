@@ -68,7 +68,8 @@ class MPIPool(object):
         for counter in range(pool_size):
             percent = (counter * 100) // pool_size
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
-            self.comm.recv(source=MPI.ANY_SOURCE)
+            req = self.comm.irecv(source=MPI.ANY_SOURCE, tag=tag)
+            req.wait()
         else:
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
 
