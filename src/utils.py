@@ -64,15 +64,6 @@ class MPIPool(object):
         self.time = MPI.Wtime()
         self.comm = MPI.COMM_SELF.Spawn(sys.executable, args=[workerpath] + args, maxprocs=self.n_workers)
 
-    def _progress_bar(self, pool_size, tag):
-        for counter in range(pool_size):
-            percent = (counter * 100) // pool_size
-            print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
-            self.comm.recv(source=MPI.ANY_SOURCE, tag=tag)
-            print('ROOT received {}'.format(counter))
-        else:
-            print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
-
     def shutdown(self):
         self.comm.Disconnect()
         print('Elapsed time: {:.2f}s'.format(MPI.Wtime() - self.time))
@@ -84,7 +75,13 @@ class MPIPool(object):
             self.comm.send(obj=task, dest=status.Get_source())
             queue.append(status.Get_source())
         pool_size = sum([self.comm.recv(source=rank, tag=1) for rank in queue])
-        self._progress_bar(pool_size, 2)
+        for counter in range(pool_size):
+            percent = (counter * 100) // pool_size
+            print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
+            self.comm.recv(source=MPI.ANY_SOURCE, status=status, tag=2)
+            print('ROOT received {}'.format(counter))
+        else:
+            print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
         data_list, tids_list, pids_list = [], [], []
         for rank in queue:
             data, tids, pids = self.comm.recv(source=rank, tag=3)
@@ -99,7 +96,13 @@ class MPIPool(object):
             self.comm.send(obj=task, dest=status.Get_source())
             queue.append(status.Get_source())
         pool_size = sum([self.comm.recv(source=rank, tag=1) for rank in queue])
-        self._progress_bar(pool_size, 2)
+        for counter in range(pool_size):
+            percent = (counter * 100) // pool_size
+            print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
+            self.comm.recv(source=MPI.ANY_SOURCE, status=status, tag=2)
+            print('ROOT received {}'.format(counter))
+        else:
+            print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
         data_size = 0
         for rank in queue:
             chunk_size = self.comm.sendrecv(data_size, dest=rank, source=rank)
@@ -107,5 +110,11 @@ class MPIPool(object):
         self.comm.bcast(obj=data_size, root=MPI.ROOT)
         self.comm.Barrier()
         print('Writing data...')
-        self._progress_bar(pool_size, 3)
+        for counter in range(pool_size):
+            percent = (counter * 100) // pool_size
+            print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
+            self.comm.recv(source=MPI.ANY_SOURCE, status=status, tag=3)
+            print('ROOT received {}'.format(counter))
+        else:
+            print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
         self.shutdown()
