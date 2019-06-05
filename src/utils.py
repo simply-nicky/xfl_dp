@@ -66,10 +66,10 @@ class MPIPool(object):
     def _progress_bar(self, pool_size):
         for counter in range(pool_size):
             percent = (counter * 100) // pool_size
-            print('Progress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent))
+            print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
             self.comm.recv(source=MPI.ANY_SOURCE)
         else:
-            print('Progress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
+            print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
 
     def _map_setup(self, task_list):
         assert len(task_list) == self.n_workers, 'wrong task_list size'
@@ -78,19 +78,23 @@ class MPIPool(object):
             self.comm.recv(source=MPI.ANY_SOURCE, status=status)
             self.comm.send(obj=task, dest=status.Get_source())
             queue.append(status.Get_source())
-        print('Gathering to root')
         pool_size = sum(self.comm.gather(None, root=MPI.ROOT))
-        print('Starting reading')
         self._progress_bar(pool_size)
         return queue, pool_size
+
+    def shutdown(self):
+        self.comm.Disconnect()
+        print('Elapsed time: {:.2f}s'.format(MPI.Wtime() - self.time))
 
     def read_map(self, task_list):
         queue = self._map_setup(task_list)[0]
         data_list, tids_list, pids_list = [], [], []
+        self.comm.Barrier()
         for rank in queue:
             data, tids, pids = self.comm.recv(source=rank)
             data_list.append(data); tids_list.append(tids); pids_list.append(pids)
-        return np.concatenate(data_list), np.concatenate(tids_list), np.concatenate(pids_list) 
+        self.shutdown()
+        return data_list, tids_list, pids_list
 
     def write_map(self, task_list):
         queue, pool_size = self._map_setup(task_list)
@@ -102,5 +106,4 @@ class MPIPool(object):
         self.comm.Barrier()
         print('Writing data...')
         self._progress_bar(pool_size)
-        self.comm.Disconnect()
-        print('Elapsed time: {:.2f}s'.format(MPI.Wtime() - self.time))
+        self.shutdown()

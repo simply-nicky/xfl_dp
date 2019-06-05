@@ -19,5 +19,6 @@ for start, stop in ranges:
     data_list.append(_data_chunk); tids_list.append(_tids_chunk); pids_list.append(_pids_chunk)
     comm.send(None, dest=0)
 data = np.concatenate(data_list); tids = np.concatenate(tids_list); pids = np.concatenate(pids_list)
+comm.Barrier()
 comm.send(obj=(data, tids, pids), dest=0)
 comm.Disconnect()

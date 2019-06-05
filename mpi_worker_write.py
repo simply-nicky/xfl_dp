@@ -38,6 +38,5 @@ for data, tids, pids in zip(data_list, tids_list, pids_list):
         pulseset[start_write:start_write + tids.size] = pids
     start_write += tids.size
     comm.send(None, dest=0)
-comm.Disconnect()
-outfile.flush()
 outfile.close()
+comm.Disconnect()
