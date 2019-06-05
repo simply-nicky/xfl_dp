@@ -10,7 +10,9 @@ try:
 except:
     raise ValueError('Could not connect to parent, wrong arguments')
 
+print('starting')
 start_read, stop_read = comm.sendrecv(None, dest=0, source=0)
+print('received')
 data_list, tids_list, pids_list = [], [], []
 ranges = chunkify(start_read, stop_read)
 comm.gather(len(ranges), root=0)
@@ -21,4 +23,5 @@ for start, stop in ranges:
 data = np.concatenate(data_list); tids = np.concatenate(tids_list); pids = np.concatenate(pids_list)
 comm.Barrier()
 comm.send(obj=(data, tids, pids), dest=0)
+print('finished')
 comm.Disconnect()

@@ -14,6 +14,7 @@ workerreadpath = os.path.join(os.path.dirname(__file__), '../mpi_worker_read.py'
 bg_roi = (slice(5000), slice(None))
 thread_size = 100
 
+gains = {68.8, 1.376}
 AGIPD_geom = load_crystfel_geometry(os.path.join(os.path.dirname(__file__), "agipd.geom"))
 
 class worker_star(object):
