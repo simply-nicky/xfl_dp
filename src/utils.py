@@ -80,7 +80,7 @@ class MPIPool(object):
             queue.append(status.Get_source())
         print('Gathering to root')
         pool_size = sum(self.comm.gather(None, root=MPI.ROOT))
-        self.comm.Barrier()
+        self.comm.barrier()
         print('Starting reading')
         self._progress_bar(pool_size)
         return queue, pool_size
