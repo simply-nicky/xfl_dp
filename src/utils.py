@@ -75,12 +75,12 @@ class MPIPool(object):
             self.comm.send(obj=task, dest=status.Get_source())
             queue.append(status.Get_source())
         pool_size = sum([self.comm.recv(source=rank, tag=1) for rank in queue])
+        print('pool size {}'.format(pool_size))
         self.comm.Barrier()
         for counter in range(pool_size):
             percent = (counter * 100) // pool_size
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
             self.comm.recv(source=MPI.ANY_SOURCE, tag=2)
-            print('ROOT received {}'.format(counter))
         else:
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
         data_list, tids_list, pids_list = [], [], []
