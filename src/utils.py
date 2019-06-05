@@ -75,6 +75,7 @@ class MPIPool(object):
     def _map_setup(self, task_list):
         assert len(task_list) == self.n_workers, 'wrong task_list size'
         status, queue = MPI.Status(), []
+        print('ranks: {}'.format(self.comm.Get_rank()))
         for task in task_list:
             self.comm.recv(source=MPI.ANY_SOURCE, status=status)
             print('ROOT: received from {}'.format(status.Get_source()))
@@ -82,7 +83,6 @@ class MPIPool(object):
             queue.append(status.Get_source())
         print('ROOT: loop ended')
         pool_size = sum(self.comm.gather(None, root=MPI.ROOT))
-        print('ROOT: gathered')
         self._progress_bar(pool_size)
         return queue, pool_size
 
