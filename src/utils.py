@@ -79,7 +79,9 @@ class MPIPool(object):
             self.comm.recv(source=MPI.ANY_SOURCE, status=status)
             self.comm.send(obj=task, dest=status.Get_source())
             queue.append(status.Get_source())
+        print('ROOT: loop ended')
         pool_size = sum(self.comm.gather(None, root=MPI.ROOT))
+        print('ROOT: gathered')
         self._progress_bar(pool_size)
         return queue, pool_size
 
