@@ -15,6 +15,7 @@ bg_roi = (slice(5000), slice(None))
 thread_size = 100
 
 gains = {68.8, 1.376}
+gain_verge = 6000
 AGIPD_geom = load_crystfel_geometry(os.path.join(os.path.dirname(__file__), "agipd.geom"))
 
 class worker_star(object):
@@ -64,7 +65,7 @@ class MPIPool(object):
         self.time = MPI.Wtime()
         self.comm = MPI.COMM_SELF.Spawn(sys.executable, args=[workerpath] + args, maxprocs=self.n_workers)
 
-    def shutdown(self):
+    def shutdown(self, queue):
         self.comm.Disconnect()
         print('Elapsed time: {:.2f}s'.format(MPI.Wtime() - self.time))
 
@@ -75,7 +76,6 @@ class MPIPool(object):
             self.comm.send(obj=task, dest=status.Get_source())
             queue.append(status.Get_source())
         pool_size = sum([self.comm.recv(source=rank, tag=1) for rank in queue])
-        print('pool_size: {}'.format(pool_size))
         for counter in range(pool_size):
             percent = (counter * 100) // pool_size
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
@@ -86,7 +86,7 @@ class MPIPool(object):
         for rank in queue:
             data, tids, pids = self.comm.recv(source=rank, tag=3)
             data_list.append(data); tids_list.append(tids); pids_list.append(pids)
-        self.shutdown()
+        self.shutdown(queue)
         return data_list, tids_list, pids_list
 
     def write_map(self, task_list):
@@ -99,9 +99,11 @@ class MPIPool(object):
         for counter in range(pool_size):
             percent = (counter * 100) // pool_size
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
+            sys.stdout.flush()
             self.comm.recv(source=MPI.ANY_SOURCE, tag=2)
         else:
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
+            sys.stdout.flush()
         data_size = 0
         for rank in queue:
             chunk_size = self.comm.sendrecv(data_size, dest=rank, source=rank)
@@ -112,7 +114,9 @@ class MPIPool(object):
         for counter in range(pool_size):
             percent = (counter * 100) // pool_size
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * (percent // 2), percent), end='\0')
+            sys.stdout.flush()
             self.comm.recv(source=MPI.ANY_SOURCE, tag=3)
         else:
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
-        self.shutdown()
+            sys.stdout.flush()
+        self.shutdown(queue)
