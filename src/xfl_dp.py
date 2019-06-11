@@ -87,29 +87,27 @@ def write_mpi(cheetah_path, output_path, data_size, n_procs, lim=20000):
     pool.write_map(ranges)
     write_args(cheetah_path, output_path, lim)
 
-def splitted_data_chunk(start, stop, cheetah_path, pids, lim):
+def splitted_data_chunk(start, stop, pid, cheetah_path, lim):
     file_handler = h5py.File(cheetah_path, 'r')
     pulse_ids = file_handler[utils.pulsepath]
     train_ids = file_handler[utils.trainpath]
     raw_data = file_handler[utils.datapath]
-    datalist, tidslist, pidslist = [[] for _ in range(len(pids))], [[] for _ in range(len(pids))], list(pids)
+    datalist, tidslist = [], []
     for idx in range(start, stop):
-        if raw_data[idx].max() > lim and pulse_ids[idx] in pids:
-            new_idx = pidslist.index(pulse_ids[idx])
-            datalist[new_idx].append(process_frame(raw_data[idx]))
-            tidslist[new_idx].append(train_ids[idx])
-    return datalist, tidslist
+        if raw_data[idx].max() > lim and pulse_ids[idx] == pid:
+            datalist.append(process_frame(raw_data[idx]))
+            tidslist.append(train_ids[idx])
+    return pid, np.array(datalist), np.array(tidslist)
 
 def splitted_data(cheetah_path, data_size, pids, lim=20000):
-    worker = partial(splitted_data_chunk, cheetah_path=cheetah_path, lim=lim, pids=pids)
-    ranges = utils.chunkify(0, data_size)
     datalist, tidslist = [[] for _ in range(len(pids))], [[] for _ in range(len(pids))]
+    worker = partial(splitted_data_chunk, cheetah_path=cheetah_path, lim=lim)
     with concurrent.futures.ProcessPoolExecutor() as executor:
-        for datalist_chunk, tidslist_chunk in executor.map(utils.worker_star(worker), ranges):
-            for (idx, data), tids in zip(enumerate(datalist_chunk), tidslist_chunk):
-                datalist[idx].extend(data)
-                tidslist[idx].extend(tids)
-    return [np.array(data) for data in datalist], [np.array(tids) for tids in tidslist]
+        for pid, data, tids in executor.map(utils.worker_star(worker), utils.splitted_chunkify(0, data_size, pids)):
+            idx = pids.index(pid)
+            if data.any(): datalist[idx].append(data)
+            if tids.any(): tidslist[idx].append(tids)
+    return [np.concatenate(data_pid) for data_pid in datalist], [np.concatenate(tids_pid) for tids_pid in tidslist]
 
 ################################################################
 # ---------------------- Serial methods ---------------------- #

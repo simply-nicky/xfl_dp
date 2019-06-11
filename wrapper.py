@@ -6,8 +6,8 @@ from multiprocessing import cpu_count
 class XFLData(object):
     def __init__(self, rnum, cnum, tag, output_folder=os.path.dirname(os.path.dirname(__file__)), online=True):
         self.cheetah_path = utils.get_path_to_data(rnum, cnum, tag, 'cxi', online)
-        self.data_size = utils.get_data_size(self.cheetah_path)
         self.output_path = utils.output_path(rnum, cnum, 'cxi', output_folder)
+        self.data_size = utils.get_data_size(self.cheetah_path)
 
     def data(self, limit=20000):
         return data(self.cheetah_path, self.data_size, limit)
@@ -17,7 +17,7 @@ class XFLData(object):
        return np.concatenate(data_list), np.concatenate(tids_list), np.concatenate(pids_list)
 
     def splitted_data(self, pids, limit=20000):
-        return splitted_data(self.cheetah_path, self.data_size, pids, limit)
+        return splitted_data(self.cheetah_path, self.data_size, list(pids), limit)
 
     def write(self, limit=20000):
         write_data(self.cheetah_path, self.output_path, self.data_size, limit)

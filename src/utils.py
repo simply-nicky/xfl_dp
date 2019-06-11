@@ -4,7 +4,7 @@ from cfelpyutils.geometry_utils import apply_geometry_to_data
 from mpi4py import MPI
 
 basepath = "/gpfs/exfel/u/scratch/MID/201802/p002200/cheetah/hdf5/r{0:04d}-{2:s}/XFEL-r{0:04d}-c{1:02d}.{3:s}"
-userpath = "cheetah/XFEL-r{0:04d}-c{1:02d}.{2:s}"
+userpath = os.path.join(os.path.dirname(__file__), "../../cheetah/XFEL-r{0:04d}-c{1:02d}.{2:s}")
 outpath = "hdf5/r{0:04d}-processed/XFEL-r{0:04d}-c{1:02d}.{2:s}"
 datapath = "entry_1/instrument_1/detector_1/detector_corrected/data"
 trainpath = "/instrument/trainID"
@@ -35,6 +35,13 @@ def chunkify(start, end):
     thread_num = (end - start) // thread_size + 1
     limits = np.linspace(start, end, thread_num + 1).astype(int)
     return list(zip(limits[:-1], limits[1:]))
+
+def splitted_chunkify(start, end, pids):
+    tasklist = []
+    for pid in pids:
+        for a, b in chunkify(start, end):
+            tasklist.append((a, b, pid))
+    return tasklist
 
 def chunkify_mpi(data_size, n_procs):
     limits = np.linspace(0, data_size, n_procs + 1).astype(int)
