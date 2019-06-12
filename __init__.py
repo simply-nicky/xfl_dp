@@ -1,2 +1,2 @@
 from .src import utils
-from .wrapper import XFLData
+from .wrapper import Scan

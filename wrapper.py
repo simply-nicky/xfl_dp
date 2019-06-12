@@ -3,7 +3,7 @@ from .src import utils, data, data_mpi, splitted_data, write_data, write_mpi
 import argparse, os, numpy as np
 from multiprocessing import cpu_count
 
-class XFLData(object):
+class Scan(object):
     def __init__(self, rnum, cnum, tag, output_folder=os.path.dirname(os.path.dirname(__file__)), online=True):
         self.cheetah_path = utils.get_path_to_data(rnum, cnum, tag, 'cxi', online)
         self.output_path = utils.output_path(rnum, cnum, 'cxi', output_folder)
@@ -36,7 +36,7 @@ def main():
     parser.add_argument('-v', '--verbosity', action='store_true', help='increase output verbosity')
     args = parser.parse_args()
 
-    xfl_data = XFLData(args.rnum, args.cnum, args.tag, args.outdir, not args.offline)
+    xfl_data = Scan(args.rnum, args.cnum, args.tag, args.outdir, not args.offline)
     if args.verbosity:
         print("List of typed arguments:")
         for key, val in vars(args).items():
