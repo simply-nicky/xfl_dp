@@ -64,7 +64,7 @@ class ABCData(metaclass=ABCMeta):
                 datalist.append(data)
                 tidslist.append(tids)
                 pidslist.append(pids)
-        return np.array(datalist), np.array(tidslist), np.array(pidslist)
+        return np.concatenate(datalist), np.concatenate(tidslist), np.concatenate(pidslist)
 
     def pid_data_chunk(self, start, stop, pid):
         datalist, tidslist = [], []
