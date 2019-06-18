@@ -4,7 +4,7 @@ import argparse, os, numpy as np, concurrent.futures, h5py
 from multiprocessing import cpu_count
 from abc import ABCMeta, abstractproperty, abstractmethod
 
-class ABCData(object, metaclass=ABCMeta):
+class ABCData(metaclass=ABCMeta):
     @abstractproperty
     def rnum(self): pass
 
@@ -131,7 +131,7 @@ class Data(ABCData):
     def write_mpi(self, n_procs=cpu_count()):
         write_mpi(self.cheetah_path, self.output_path, self.data_size, n_procs, self.limit)
 
-class PupilData(ABCMeta):
+class PupilData(ABCData):
     rnum, cnum, tag, output_folder, limit, online = None, None, None, None, None, None
 
     def __init__(self, rnum, cnum, tag, limit=20000, output_folder=os.path.dirname(os.path.dirname(__file__)), online=True):
