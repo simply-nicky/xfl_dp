@@ -12,6 +12,7 @@ pulsepath = "/instrument/pulseID"
 workerwritepath = os.path.join(os.path.dirname(__file__), '../mpi_worker_write.py')
 workerreadpath = os.path.join(os.path.dirname(__file__), '../mpi_worker_read.py')
 bg_roi = (slice(5000), slice(None))
+pupil_roi = (slice(750, 1040), slice(780, 1090))
 thread_size = 100
 
 gains = {68.8, 1.376}
@@ -30,6 +31,13 @@ def get_data_size(cheetah_path):
     size = f[datapath].shape[0]
     f.close()
     return size
+
+def add_data_to_dset(dset, data):
+    dset.refresh()
+    dsetshape = dset.shape
+    dset.resize((dsetshape[0] + data.shape[0],) + dsetshape[1:])
+    dset[dsetshape[0]:] = data
+    dset.flush()
 
 def chunkify(start, end):
     thread_num = (end - start) // thread_size + 1
@@ -53,7 +61,7 @@ def get_path_to_data(rnum, cnum, tag, ext, online):
 def apply_agipd_geom(frame):
     return apply_geometry_to_data(frame, AGIPD_geom)
 
-def make_output_dir(path):
+def make_dirs(path):
     try:
         os.makedirs(os.path.dirname(path))
     except OSError as e:
