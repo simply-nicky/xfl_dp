@@ -80,7 +80,7 @@ class MPIPool(object):
         self.time = MPI.Wtime()
         self.comm = MPI.COMM_SELF.Spawn(sys.executable, args=[workerpath] + args, maxprocs=self.n_workers)
 
-    def shutdown(self, queue):
+    def shutdown(self):
         self.comm.Disconnect()
         print('Elapsed time: {:.2f}s'.format(MPI.Wtime() - self.time))
 
@@ -101,7 +101,7 @@ class MPIPool(object):
         for rank in queue:
             data, tids, pids = self.comm.recv(source=rank, tag=3)
             data_list.append(data); tids_list.append(tids); pids_list.append(pids)
-        self.shutdown(queue)
+        self.shutdown()
         return data_list, tids_list, pids_list
 
     def write_map(self, task_list):
@@ -134,4 +134,4 @@ class MPIPool(object):
         else:
             print('\rProgress: [{0:<50}] {1:3d}%'.format('=' * 50, 100))
             sys.stdout.flush()
-        self.shutdown(queue)
+        self.shutdown()

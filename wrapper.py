@@ -92,27 +92,17 @@ class ABCData(metaclass=ABCMeta):
             data = self.process_frame(idx)
         return data[np.newaxis], np.array([tid]), np.array([pid]), idx + 1
 
-    def _save_args(self):
+    def save(self):
+        data, tids, pids = self.data()
         utils.make_dirs(self.output_path)
-        self.outfile = h5py.File(self.output_path, 'r+')
+        self.outfile = h5py.File(self.output_path, 'w')
         arggroup = self.outfile.create_group('arguments')
         arggroup.create_dataset('cheetah path', data=np.string_(self.cheetah_path))
         arggroup.create_dataset('trimming limit', data=self.limit)
-
-    def save(self):
-        self._save_args()
-        frame, tid, pid, idx = self.first_frame()
         datagroup = self.outfile.create_group('data')
-        dataset = datagroup.create_dataset('data', chunks=True, maxshape=(None,) + frame.shape[1:], data=frame, compression='gzip')
-        trainset = datagroup.create_dataset('trainID', chunks=True, maxshape=(None,), data=tid)
-        pulseset = datagroup.create_dataset('pulseID', chunks=True, maxshape=(None,), data=pid)
-        self.outfile.swmr_mode = True
-        ranges = utils.chunkify(idx, self.data_size)
-        with concurrent.futures.ProcessPoolExecutor() as executor:
-            for data, tids, pids in executor.map(utils.worker_star(self.data_chunk), ranges):
-                utils.add_data_to_dset(dataset, data)
-                utils.add_data_to_dset(trainset, tids)
-                utils.add_data_to_dset(pulseset, pids)
+        datagroup.create_dataset('data', data=data, compression='gzip')
+        datagroup.create_dataset('trainID', data=tids)
+        datagroup.create_dataset('pulseID', data=pids)        
         self.outfile.close()
 
 class Data(ABCData):
@@ -128,7 +118,7 @@ class Data(ABCData):
        data_list, tids_list, pids_list = data_mpi(self.cheetah_path, self.data_size, n_procs, self.limit)
        return np.concatenate(data_list), np.concatenate(tids_list), np.concatenate(pids_list)
 
-    def write_mpi(self, n_procs=cpu_count()):
+    def save_mpi(self, n_procs=cpu_count()):
         write_mpi(self.cheetah_path, self.output_path, self.data_size, n_procs, self.limit)
 
 class PupilData(ABCData):
