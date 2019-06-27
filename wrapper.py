@@ -27,10 +27,10 @@ class ABCData(metaclass=ABCMeta):
     def process_frame(self, frame): pass
 
     @property
-    def cheetah_path(self): return utils.get_path_to_data(self.rnum, self.cnum, self.tag, 'cxi', self.online)
+    def cheetah_path(self): return utils.get_path_to_data(self.rnum, self.cnum, self.tag, self.online)
 
     @property
-    def output_path(self): return utils.output_path(self.rnum, self.cnum, 'cxi', self.output_folder)
+    def output_path(self): return utils.output_path(self.rnum, self.cnum, self.output_folder)
 
     @property
     def data_size(self): return utils.get_data_size(self.cheetah_path)
@@ -92,17 +92,34 @@ class ABCData(metaclass=ABCMeta):
             data = self.process_frame(idx)
         return data[np.newaxis], np.array([tid]), np.array([pid]), idx + 1
 
-    def save(self):
-        data, tids, pids = self.data()
+    def _save_init(self):
         utils.make_dirs(self.output_path)
         self.outfile = h5py.File(self.output_path, 'w')
         arggroup = self.outfile.create_group('arguments')
         arggroup.create_dataset('cheetah path', data=np.string_(self.cheetah_path))
         arggroup.create_dataset('trimming limit', data=self.limit)
+        arggroup.create_dataset('run number', data=self.rnum)
+        arggroup.create_dataset('data type', data=self.__class__.__name__)
+
+    def save(self):
+        data, tids, pids = self.data()
+        self._save_init()
         datagroup = self.outfile.create_group('data')
         datagroup.create_dataset('data', data=data, compression='gzip')
         datagroup.create_dataset('trainID', data=tids)
         datagroup.create_dataset('pulseID', data=pids)        
+        self.outfile.close()
+
+    def pids_save(self, pids):
+        datalist, tidslist = self.pids_data(pids)
+        self._save_init()
+        datagroup = self.outfile.create_group('data')
+        dgroup = datagroup.create_group('data')
+        tidsgroup = datagroup.create_group('traindID')
+        for pid, data, tids in zip(pids, datalist, tidslist):
+            dgroup.create_dataset(str(pid), data=data, compression='gzip')
+            tidsgroup.create_dataset(str(pid), data=tids)
+        datagroup.create_dataset('pulseID', data=pids)
         self.outfile.close()
 
 class Data(ABCData):

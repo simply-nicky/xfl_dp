@@ -3,9 +3,9 @@ from cfelpyutils.crystfel_utils import load_crystfel_geometry
 from cfelpyutils.geometry_utils import apply_geometry_to_data
 from mpi4py import MPI
 
-basepath = "/gpfs/exfel/u/scratch/MID/201802/p002200/cheetah/hdf5/r{0:04d}-{2:s}/XFEL-r{0:04d}-c{1:02d}.{3:s}"
-userpath = os.path.join(os.path.dirname(__file__), "../../cheetah/XFEL-r{0:04d}-c{1:02d}.{2:s}")
-outpath = "hdf5/r{0:04d}-processed/XFEL-r{0:04d}-c{1:02d}.{2:s}"
+basepath = "/gpfs/exfel/u/scratch/MID/201802/p002200/cheetah/hdf5/r{0:04d}-{2:s}/XFEL-r{0:04d}-c{1:02d}.cxi"
+userpath = os.path.join(os.path.dirname(__file__), "../../cheetah/XFEL-r{0:04d}-c{1:02d}.cxi")
+outpath = "hdf5/r{0:04d}-processed/XFEL-r{0:04d}-c{1:02d}.cxi"
 datapath = "entry_1/instrument_1/detector_1/detector_corrected/data"
 trainpath = "/instrument/trainID"
 pulsepath = "/instrument/pulseID"
@@ -55,8 +55,8 @@ def chunkify_mpi(data_size, n_procs):
     limits = np.linspace(0, data_size, n_procs + 1).astype(int)
     return list(zip(limits[:-1], limits[1:]))
 
-def get_path_to_data(rnum, cnum, tag, ext, online):
-    return basepath.format(rnum, cnum, tag, ext) if online else userpath.format(rnum, cnum, ext)
+def get_path_to_data(rnum, cnum, tag, online):
+    return basepath.format(rnum, cnum, tag) if online else userpath.format(rnum, cnum)
 
 def apply_agipd_geom(frame):
     return apply_geometry_to_data(frame, AGIPD_geom)
@@ -67,12 +67,12 @@ def make_dirs(path):
     except OSError as e:
         if e.errno != errno.EEXIST: raise
 
-def output_path(rnum, cnum, ext, output_folder=os.path.dirname(os.path.dirname(__file__))):
-    abspath = os.path.join(output_folder, outpath.format(rnum, cnum, ext))
+def output_path(rnum, cnum, output_folder=os.path.dirname(os.path.dirname(__file__))):
+    abspath = os.path.join(output_folder, outpath.format(rnum, cnum))
     if not os.path.isfile(abspath):
         return abspath
     else:
-        return output_path(rnum, cnum + 1, ext, output_folder)
+        return output_path(rnum, cnum + 1, output_folder)
 
 class MPIPool(object):
     def __init__(self, workerpath, args, n_procs):
