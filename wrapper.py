@@ -60,7 +60,7 @@ class ABCData(metaclass=ABCMeta):
         ranges = utils.chunkify(0, self.data_size)
         datalist, tidslist, pidslist = [], [], []
         with concurrent.futures.ProcessPoolExecutor() as executor:
-            for data, pids, tids in executor.map(utils.worker_star(self.data_chunk), ranges):
+            for data, tids, pids in executor.map(utils.worker_star(self.data_chunk), ranges):
                 if data.any():
                     datalist.append(data)
                     tidslist.append(tids)
