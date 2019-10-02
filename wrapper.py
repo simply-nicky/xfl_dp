@@ -1,152 +1,142 @@
-from __future__ import print_function
-from .src import utils, data_mpi, write_mpi
-import argparse, os, numpy as np, concurrent.futures, h5py
-from multiprocessing import cpu_count
-from abc import ABCMeta, abstractproperty, abstractmethod
+import argparse
+import os
+import concurrent.futures
+from abc import ABCMeta, abstractmethod
+import numpy as np
+import h5py
+from . import utils
 
 class ABCData(metaclass=ABCMeta):
-    @abstractproperty
-    def rnum(self): pass
+    RAW_FILE_PATH = utils.BASE_PATH
+    OUT_FOLDER = os.path.dirname(os.path.dirname(__file__))
+    OUT_PATH = os.path.join(OUT_FOLDER, "hdf5/r{0:04d}/XFEL-r{0:04d}-c{1:02d}.h5")
+    DATA_PATH = utils.DATA_PATH
+    PULSE_PATH = utils.PULSE_PATH
+    TRAIN_PATH = utils.TRAIN_PATH
 
-    @abstractproperty
-    def cnum(self): pass
+    def __init__(self, rnum, cnum):
+        self.rnum, self.cnum = rnum, cnum
 
-    @abstractproperty
-    def tag(self): pass
+    @property
+    def raw_file_path(self):
+        return self.RAW_FILE_PATH.format(self.rnum, self.cnum)
 
-    @abstractproperty
-    def output_folder(self): pass
+    @property
+    def out_path(self):
+        return self.OUT_PATH(self.rnum, self.cnum)
 
-    @abstractproperty
-    def limit(self): pass
+    @property
+    def data_size(self):
+        return self.data.shape[0]
 
-    @abstractproperty
-    def online(self): pass
+    @property
+    def raw_file(self):
+        return h5py.File(self.raw_file_path, 'r')
+
+    @property
+    def data(self):
+        return self.raw_file[self.DATA_PATH]
+
+    @property
+    def train_ids(self):
+        return self.raw_file[self.TRAIN_PATH]
+
+    @property
+    def pulse_ids(self):
+        return self.raw_file[self.PULSE_PATH]
 
     @abstractmethod
-    def process_frame(self, frame): pass
+    def get_data_chunk(self, start, stop):
+        pass
 
-    @property
-    def cheetah_path(self): return utils.get_path_to_data(self.rnum, self.cnum, self.tag, self.online)
-
-    @property
-    def output_path(self): return utils.output_path(self.rnum, self.cnum, self.output_folder)
-
-    @property
-    def data_size(self): return utils.get_data_size(self.cheetah_path)
-
-    @property
-    def raw_file(self): return h5py.File(self.cheetah_path, 'r')
-
-    @property
-    def raw_data(self): return self.raw_file[utils.datapath]
-
-    @property
-    def raw_tids(self): return self.raw_file[utils.trainpath]
-
-    @property
-    def raw_pids(self): return self.raw_file[utils.pulsepath]
-
-    def data_chunk(self, start, stop):
-        data, tidslist, pidslist = [], [], []
-        for idx in range(start, stop):
-            if self.raw_data[idx].max() > self.limit:
-                pidslist.append(self.raw_pids[idx])
-                tidslist.append(self.raw_tids[idx])
-                data.append(self.process_frame(idx))
-        return np.array(data), np.array(tidslist), np.array(pidslist)
-
-    def data(self):
+    def get_data(self):
         ranges = utils.chunkify(0, self.data_size)
-        datalist, tidslist, pidslist = [], [], []
+        fut_list = []
         with concurrent.futures.ProcessPoolExecutor() as executor:
-            for data, tids, pids in executor.map(utils.worker_star(self.data_chunk), ranges):
-                if data.any():
-                    datalist.append(data)
-                    tidslist.append(tids)
-                    pidslist.append(pids)
-        return np.concatenate(datalist), np.concatenate(tidslist), np.concatenate(pidslist)
+            for start, stop in ranges:
+                fut_list.append(executor.submit(self.get_data_chunk, start, stop))
+        data_list, tids_list, pids_list = [], [], []
+        for fut in fut_list:
+            data_chunk, tids_chunk, pids_chunk = fut.result()
+            data_list.append(data_chunk)
+            tids_list.append(tids_chunk)
+            pids_list.append(pids_chunk)
+        return np.concatenate(data_list), np.concatenate(tids_list), np.concatenate(pids_list)
 
-    def pid_data_chunk(self, start, stop, pid):
-        datalist, tidslist = [], []
-        for idx in range(start, stop):
-            if self.raw_data[idx].max() > self.limit and self.raw_pids[idx] == pid:
-                datalist.append(self.process_frame(idx))
-                tidslist.append(self.raw_tids[idx])
-        return pid, np.array(datalist), np.array(tidslist)
+    def get_ordered_data_chunk(self, start, stop, pid):
+        data_chunk, tids_chunk, pids_chunk = self.get_data_chunk(start, stop)
+        idxs = np.where(pids_chunk == pid)
+        return data_chunk[idxs], tids_chunk[idxs]
 
-    def pids_data(self, pids):
-        _pids = list(pids)
-        datalist, tidslist = [[] for _ in range(len(_pids))], [[] for _ in range(len(_pids))]
+    def get_ordered_data(self, pids):
+        pids_list = list(pids)
+        fut_lists = [[] for _ in pids_list]
         with concurrent.futures.ProcessPoolExecutor() as executor:
-            for pid, data, tids in executor.map(utils.worker_star(self.pid_data_chunk), utils.splitted_chunkify(0, self.data_size, _pids)):
-                idx = _pids.index(pid)
-                if data.any(): datalist[idx].append(data)
-                if tids.any(): tidslist[idx].append(tids)
-        return [np.concatenate(pid_data) for pid_data in datalist], [np.concatenate(pid_tids) for pid_tids in tidslist]
+            for pid, fut_list in zip(pids_list, fut_lists):
+                for start, stop in utils.chunkify(0,
+                                                  self.data_size,
+                                                  utils.CORES_COUNT // len(pids_list) + 1):
+                    fut_list.append(executor.submit(self.get_ordered_data_chunk, start, stop, pid))
+        data_list, tids_list = [], []
+        for fut_list in fut_lists:
+            pid_data_list, pid_tids_list = [], []
+            for fut in fut_list:
+                data_chunk, tids_chunk = fut.result()
+                if data_chunk.any():
+                    pid_data_list.append(data_chunk)
+                    pid_tids_list.append(tids_chunk)
+            data_list.append(np.concatenate(pid_data_list))
+            tids_list.append(np.concatenate(pid_tids_list))
+        return data_list, tids_list
 
-    def first_frame(self):
-        idx = 0
-        while self.raw_data[idx].max() < self.limit: idx += 1
-        else:
-            pid, tid = self.raw_pids[idx], self.raw_tids[idx]
-            data = self.process_frame(idx)
-        return data[np.newaxis], np.array([tid]), np.array([pid]), idx + 1
+    def _create_outfile(self):
+        utils.make_output_dir(os.path.dirname(self.out_path))
+        return h5py.File(self.out_path, 'w')
 
-    def _save_init(self):
-        utils.make_dirs(self.output_path)
-        self.outfile = h5py.File(self.output_path, 'w')
-        arggroup = self.outfile.create_group('arguments')
-        arggroup.create_dataset('cheetah path', data=np.string_(self.cheetah_path))
-        arggroup.create_dataset('trimming limit', data=self.limit)
-        arggroup.create_dataset('run number', data=self.rnum)
-        arggroup.create_dataset('data type', data=self.__class__.__name__)
+    def _save_parameters(self, outfile):
+        arg_group = outfile.create_group('arguments')
+        arg_group.create_dataset('data_path', data=np.string_(self.raw_file_path))
+        arg_group.create_dataset('run_number', data=self.rnum)
+        arg_group.create_dataset('c_number', data=self.cnum)
+        arg_group.create_dataset('data_type', data=self.__class__.__name__)
+
+    def _save_data(self, outfile):
+        data, tids, pids = self.get_data()
+        data_group = outfile.create_group('data')
+        data_group.create_dataset('data', data=data, compression='gzip')
+        data_group.create_dataset('trainID', data=tids)
+        data_group.create_dataset('pulseID', data=pids)  
 
     def save(self):
-        data, tids, pids = self.data()
-        self._save_init()
-        datagroup = self.outfile.create_group('data')
-        datagroup.create_dataset('data', data=data, compression='gzip')
-        datagroup.create_dataset('trainID', data=tids)
-        datagroup.create_dataset('pulseID', data=pids)        
-        self.outfile.close()
+        out_file = self._create_outfile()
+        self._save_parameters(out_file)
+        self._save_data(out_file)      
+        out_file.close()
 
-    def pids_save(self, pids):
-        datalist, tidslist = self.pids_data(pids)
-        self._save_init()
-        datagroup = self.outfile.create_group('data')
-        dgroup = datagroup.create_group('data')
-        tidsgroup = datagroup.create_group('traindID')
-        for pid, data, tids in zip(pids, datalist, tidslist):
-            dgroup.create_dataset(str(pid), data=data, compression='gzip')
-            tidsgroup.create_dataset(str(pid), data=tids)
-        datagroup.create_dataset('pulseID', data=pids)
-        self.outfile.close()
+    def _save_ordered_data(self, out_file, pids):
+        data_list, tids_list = self.get_ordered_data(pids)
+        data_group = out_file.create_group('data')
+        for pid, data, tids in zip(pids, data_list, tids_list):
+            pid_group = data_group.create_group(str(pid))
+            pid_group.create_dataset('data', data=data, compression='gzip')
+            pid_group.create_dataset('trainID', data=tids)
+        data_group.create_dataset('pulseID', data=pids)
 
 class Data(ABCData):
-    rnum, cnum, tag, output_folder, limit, online = None, None, None, None, None, None
+    def get_data_chunk(self, start, stop):
+        return self.data[start, stop], self.train_ids[start, stop], self.pulse_ids[start, stop]
 
-    def __init__(self, rnum, cnum, tag, limit=20000, output_folder=os.path.dirname(os.path.dirname(__file__)), online=True):
-        self.rnum, self.cnum, self.tag, self.output_folder, self.limit, self.online = rnum, cnum, tag, output_folder, limit, online
+class TrimData(ABCData):
+    def __init__(self, rnum, cnum, limit=20000):
+        super(TrimData, self).__init__(rnum, cnum)
+        self.limit = limit
 
-    def process_frame(self, idx):
-        return utils.apply_agipd_geom(self.raw_data[idx]).astype(np.int32)
-
-    def data_mpi(self, n_procs=cpu_count()):
-       data_list, tids_list, pids_list = data_mpi(self.cheetah_path, self.data_size, n_procs, self.limit)
-       return np.concatenate(data_list), np.concatenate(tids_list), np.concatenate(pids_list)
-
-    def save_mpi(self, n_procs=cpu_count()):
-        write_mpi(self.cheetah_path, self.output_path, self.data_size, n_procs, self.limit)
-
-class PupilData(ABCData):
-    rnum, cnum, tag, output_folder, limit, online = None, None, None, None, None, None
-
-    def __init__(self, rnum, cnum, tag, limit=20000, output_folder=os.path.dirname(os.path.dirname(__file__)), online=True):
-        self.rnum, self.cnum, self.tag, self.output_folder, self.limit, self.online = rnum, cnum, tag, output_folder, limit, online
-
-    def process_frame(self, idx):
-        return utils.apply_agipd_geom(self.raw_data[idx]).astype(np.int32)[utils.pupil_roi]
+    def get_data_chunk(self, start, stop):
+        data_chunk = self.data[start, stop]
+        pids_chunk = self.pulse_ids[start, stop]
+        tids_chunk = self.train_ids[start, stop]
+        idxs = np.where(data_chunk.max(axis=(1, 2)) > self.limit)
+        return data_chunk[idxs], tids_chunk[idxs], pids_chunk[idxs]
 
 def main():
     parser = argparse.ArgumentParser(description='Run XFEL post processing of cheetah data')
@@ -159,13 +149,13 @@ def main():
     parser.add_argument('-v', '--verbosity', action='store_true', help='increase output verbosity')
     args = parser.parse_args()
 
-    xfl_data = Data(args.rnum, args.cnum, args.tag, args.limit, args.outdir, not args.offline)
+    xfl_data = TrimData(args.rnum, args.cnum, args.limit)
     if args.verbosity:
         print("List of typed arguments:")
         for key, val in vars(args).items():
             print(key, val, sep=' = ')
-        print("cheetah data is located in %s" % xfl_data.cheetah_path)
-        print("Writing data to folder: %s" % xfl_data.output_path)
+        print("cheetah data is located in %s" % xfl_data.raw_file_path)
+        print("Writing data to folder: %s" % xfl_data.out_path)
         xfl_data.save()
         print("Done")
     else:
