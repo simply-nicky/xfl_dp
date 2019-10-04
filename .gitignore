@@ -1,0 +1,13 @@
+# Data folders
+cheetah/
+energyscans/
+hdf5/
+raw/
+wavefronts/
+
+# Miscellaneous data
+figures/
+movies/
+
+# jupyter chackpoints
+.ipynb_checkpoints/
