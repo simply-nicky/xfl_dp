@@ -1,3 +1,6 @@
+"""
+mpi_worker_read.py - MPI worker module for reading data
+"""
 import sys
 import numpy as np
 from mpi4py import MPI

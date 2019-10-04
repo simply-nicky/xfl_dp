@@ -1,3 +1,6 @@
+"""
+mpi_pool.py - MPI pool implementation module
+"""
 import time
 import sys
 import os

@@ -1,3 +1,6 @@
+"""
+mpi_worker_write.py - MPI worker module for writing data
+"""
 import sys
 import h5py
 from mpi4py import MPI

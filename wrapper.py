@@ -1,3 +1,6 @@
+"""
+wrapper.py - a module with main data processing class implementations
+"""
 import argparse
 import os
 import concurrent.futures

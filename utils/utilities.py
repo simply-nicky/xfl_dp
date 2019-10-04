@@ -1,3 +1,6 @@
+"""
+utilities.py - utility module with utility functions and constants
+"""
 import os
 import errno
 from multiprocessing import cpu_count
