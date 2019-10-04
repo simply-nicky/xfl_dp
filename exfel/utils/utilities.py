@@ -11,15 +11,10 @@ from cfelpyutils.geometry_utils import apply_geometry_to_data
 BASE_PATH = "/gpfs/exfel/u/scratch/MID/201802/p002200/cheetah/hdf5/r{0:04d}-data/XFEL-r{0:04d}-c{1:02d}.h5"
 USER_PATH = os.path.join(os.path.dirname(__file__), "../../cheetah/XFEL-r{0:04d}-c{1:02d}.cxi")
 OUT_PATH = "hdf5/r{0:04d}/XFEL-r{0:04d}-c{1:02d}.h5"
-DATA_PATH = "entry_1/instrument_1/detector_1/detector_corrected/data"
-TRAIN_PATH = "/instrument/trainID"
-PULSE_PATH = "/instrument/pulseID"
 CORES_COUNT = cpu_count()
 BG_ROI = (slice(5000), slice(None))
 PUPIL_ROI = (slice(750, 1040), slice(780, 1090))
 
-GAINS = {68.8, 1.376}
-GAIN_VERGE = 6000
 AGIPD_GEOM = load_crystfel_geometry(os.path.join(os.path.dirname(__file__), "agipd.geom"))
 
 def add_data_to_dset(dset, data):
