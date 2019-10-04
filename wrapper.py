@@ -6,32 +6,49 @@ import numpy as np
 import h5py
 from . import utils
 
+class DataFactory(object):
+    def __init__(self,
+                 file_path=utils.BASE_PATH,
+                 data_path=utils.DATA_PATH,
+                 pulse_path=utils.PULSE_PATH,
+                 train_path=utils.TRAIN_PATH):
+        self.file_path, self.data_path = file_path, data_path
+        self.pulse_path, self.train_path = pulse_path, train_path
+
+    def __call__(self, Class, *args, **kwargs):
+        obj = Class(*args, **kwargs)
+        obj.FILE_PATH = self.file_path
+        obj.DATA_PATH = self.data_path
+        obj.PULSE_PATH = self.pulse_path
+        obj.TRAIN_PATH = self.train_path
+        return obj
+
 class ABCData(metaclass=ABCMeta):
-    RAW_FILE_PATH = utils.BASE_PATH
+    FILE_PATH = utils.BASE_PATH
     OUT_FOLDER = os.path.dirname(os.path.dirname(__file__))
     OUT_PATH = os.path.join(OUT_FOLDER, "hdf5/r{0:04d}/XFEL-r{0:04d}-c{1:02d}.h5")
     DATA_PATH = utils.DATA_PATH
     PULSE_PATH = utils.PULSE_PATH
     TRAIN_PATH = utils.TRAIN_PATH
 
-    def __init__(self, rnum, cnum):
+    def __init__(self, rnum=None, cnum=None):
         self.rnum, self.cnum = rnum, cnum
 
     @property
-    def raw_file_path(self):
-        return self.RAW_FILE_PATH.format(self.rnum, self.cnum)
+    def file_path(self):
+        return self.FILE_PATH.format(self.rnum, self.cnum)
 
     @property
     def out_path(self):
         return self.OUT_PATH(self.rnum, self.cnum)
 
     @property
-    def data_size(self):
+    def size(self):
         return self.data.shape[0]
 
     @property
     def raw_file(self):
-        return h5py.File(self.raw_file_path, 'r')
+        return h5py.File(self.file_path, 'r')
 
     @property
     def data(self):
@@ -50,7 +67,7 @@ class ABCData(metaclass=ABCMeta):
         pass
 
     def get_data(self):
-        ranges = utils.chunkify(0, self.data_size)
+        ranges = utils.chunkify(0, self.size)
         fut_list = []
         with concurrent.futures.ProcessPoolExecutor() as executor:
             for start, stop in ranges:
@@ -74,7 +91,7 @@ class ABCData(metaclass=ABCMeta):
         with concurrent.futures.ProcessPoolExecutor() as executor:
             for pid, fut_list in zip(pids_list, fut_lists):
                 for start, stop in utils.chunkify(0,
-                                                  self.data_size,
+                                                  self.size,
                                                   utils.CORES_COUNT // len(pids_list) + 1):
                     fut_list.append(executor.submit(self.get_ordered_data_chunk, start, stop, pid))
         data_list, tids_list = [], []
@@ -95,7 +112,7 @@ class ABCData(metaclass=ABCMeta):
 
     def _save_parameters(self, outfile):
         arg_group = outfile.create_group('arguments')
-        arg_group.create_dataset('data_path', data=np.string_(self.raw_file_path))
+        arg_group.create_dataset('data_path', data=np.string_(self.file_path))
         arg_group.create_dataset('run_number', data=self.rnum)
         arg_group.create_dataset('c_number', data=self.cnum)
         arg_group.create_dataset('data_type', data=self.__class__.__name__)
@@ -127,7 +144,7 @@ class Data(ABCData):
         return self.data[start, stop], self.train_ids[start, stop], self.pulse_ids[start, stop]
 
 class TrimData(ABCData):
-    def __init__(self, rnum, cnum, limit=20000):
+    def __init__(self, rnum=None, cnum=None, limit=20000):
         super(TrimData, self).__init__(rnum, cnum)
         self.limit = limit
 
@@ -154,9 +171,10 @@ def main():
         print("List of typed arguments:")
         for key, val in vars(args).items():
             print(key, val, sep=' = ')
-        print("cheetah data is located in %s" % xfl_data.raw_file_path)
+        print("cheetah data is located in %s" % xfl_data.file_path)
         print("Writing data to folder: %s" % xfl_data.out_path)
         xfl_data.save()
         print("Done")
     else:
         xfl_data.save()
+        

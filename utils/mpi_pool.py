@@ -1,54 +1,36 @@
-import os
 import time
-import errno
 import sys
+import os
 import h5py
-from multiprocessing import cpu_count
 import numpy as np
-from cfelpyutils.crystfel_utils import load_crystfel_geometry
-from cfelpyutils.geometry_utils import apply_geometry_to_data
 from mpi4py import MPI
+from .utilities import apply_agipd_geom, make_output_dir
 
-BASE_PATH = "/gpfs/exfel/u/scratch/MID/201802/p002200/cheetah/hdf5/r{0:04d}-data/XFEL-r{0:04d}-c{1:02d}.h5"
-USER_PATH = os.path.join(os.path.dirname(__file__), "../../cheetah/XFEL-r{0:04d}-c{1:02d}.cxi")
-OUT_PATH = "hdf5/r{0:04d}/XFEL-r{0:04d}-c{1:02d}.h5"
 DATA_PATH = "entry_1/instrument_1/detector_1/detector_corrected/data"
 TRAIN_PATH = "/instrument/trainID"
 PULSE_PATH = "/instrument/pulseID"
-CORES_COUNT = cpu_count()
 WORKER_WRITE_PATH = os.path.join(os.path.dirname(__file__), '../mpi_worker_write.py')
 WORKER_READ_PATH = os.path.join(os.path.dirname(__file__), '../mpi_worker_read.py')
-BG_ROI = (slice(5000), slice(None))
-PUPIL_ROI = (slice(750, 1040), slice(780, 1090))
-
-GAINS = {68.8, 1.376}
-GAIN_VERGE = 6000
-AGIPD_GEOM = load_crystfel_geometry(os.path.join(os.path.dirname(__file__), "agipd.geom"))
-
-def add_data_to_dset(dset, data):
-    dset.refresh()
-    dsetshape = dset.shape
-    dset.resize((dsetshape[0] + data.shape[0],) + dsetshape[1:])
-    dset[dsetshape[0]:] = data
-    dset.flush()
-
-def chunkify(start, end, thread_num=CORES_COUNT):
-    limits = np.linspace(start, end, thread_num + 1).astype(int)
-    return list(zip(limits[:-1], limits[1:]))
 
 def chunkify_mpi(data_size, n_procs):
     limits = np.linspace(0, data_size, n_procs + 1).astype(int)
     return list(zip(limits[:-1], limits[1:]))
 
-def apply_agipd_geom(frame):
-    return apply_geometry_to_data(frame, AGIPD_GEOM)
+def process_frame(frame):
+    return apply_agipd_geom(frame).astype(np.int32)
 
-def make_output_dir(path):
-    try:
-        os.makedirs(path)
-    except OSError as error:
-        if error.errno != errno.EEXIST:
-            raise OSError(error.errno, error.strerror, error.filename)
+def data_chunk(start, stop, cheetah_path, lim):
+    file_handler = h5py.File(cheetah_path, 'r')
+    pulse_ids = file_handler[PULSE_PATH]
+    train_ids = file_handler[TRAIN_PATH]
+    raw_data = file_handler[DATA_PATH]
+    data, tidslist, pidslist = [], [], []
+    for idx in range(start, stop):
+        if raw_data[idx].max() > lim:
+            pidslist.append(pulse_ids[idx])
+            tidslist.append(train_ids[idx])
+            data.append(process_frame(raw_data[idx]))
+    return np.array(data), np.array(tidslist), np.array(pidslist)
 
 def data_mpi(cheetah_path, data_size, n_procs, lim=20000):
     ranges = chunkify_mpi(data_size, n_procs - 1)
@@ -73,7 +55,9 @@ class MPIPool(object):
     def __init__(self, workerpath, args, n_procs):
         self.n_procs, self.n_workers = n_procs, n_procs - 1
         self.time = MPI.Wtime()
-        self.comm = MPI.COMM_SELF.Spawn(sys.executable, args=[workerpath] + args, maxprocs=self.n_workers)
+        self.comm = MPI.COMM_SELF.Spawn(sys.executable,
+                                        args=[workerpath] + args,
+                                        maxprocs=self.n_workers)
 
     def shutdown(self):
         self.comm.Disconnect()
@@ -94,7 +78,9 @@ class MPIPool(object):
         data_list, tids_list, pids_list = [], [], []
         for rank in queue:
             data, tids, pids = self.comm.recv(source=rank, tag=3)
-            data_list.append(data); tids_list.append(tids); pids_list.append(pids)
+            data_list.append(data)
+            tids_list.append(tids)
+            pids_list.append(pids)
         self.shutdown()
         return data_list, tids_list, pids_list
 

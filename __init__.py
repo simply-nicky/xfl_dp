@@ -1,2 +1,2 @@
-from .src import utils
-from .wrapper import Data, PupilData
+from .wrapper import Data, TrimData, DataFactory
+from . import utils
