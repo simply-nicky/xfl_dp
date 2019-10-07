@@ -218,6 +218,7 @@ class ABCRawData(ABCData):
                     pid_data_list.append(data_chunk)
                     pid_gain_list.append(gain_chunk)
                     pid_tids_list.append(tids_chunk)
+            print(len(pid_data_list))
             if pid_data_list:
                 data_list.append(np.concatenate(pid_data_list))
                 gain_list.append(np.concatenate(pid_gain_list))
