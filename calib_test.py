@@ -13,7 +13,7 @@ def main(file_path=FILE_PATH,
          train_path=TRAIN_PATH):
     data = RawTrimData(rnum=221,
                        cnum=0,
-                       limit=20000,
+                       limit=2000,
                        file_path=file_path,
                        data_path=data_path,
                        gain_path=gain_path,

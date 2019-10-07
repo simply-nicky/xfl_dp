@@ -81,7 +81,7 @@ class ABCData(metaclass=ABCMeta):
         return data_chunk[idxs], tids_chunk[idxs]
 
     def get_ordered_data(self, pids=None):
-        _pids = self.PIDS if pids is None else pids
+        _pids = self.PIDS if pids is None else np.array(pids)
         fut_lists = [[] for _ in _pids]
         with concurrent.futures.ProcessPoolExecutor() as executor:
             for pid, fut_list in zip(_pids, fut_lists):
@@ -198,7 +198,7 @@ class ABCRawData(ABCData):
         return data_chunk[idxs], gain_chunk[idxs], tids_chunk[idxs]
 
     def get_ordered_data(self, pids=None):
-        _pids = self.PIDS if pids is None else pids
+        _pids = self.PIDS if pids is None else np.array(pids)
         fut_lists = [[] for _ in _pids]
         with concurrent.futures.ProcessPoolExecutor() as executor:
             for pid, fut_list in zip(_pids, fut_lists):
