@@ -19,6 +19,7 @@ def main(file_path=FILE_PATH,
                    train_path=train_path,
                    pulse_path=pulse_path)
     data_list, _, _, pids = data.get_ordered_data(pids=[0, 4])
+    print("Pulse IDs: {0}".format(pids))
     for pid, data in zip(pids, data_list):
         print("Pulse ID: {0:d}, data size: {1}".format(pid, data.shape))
 
