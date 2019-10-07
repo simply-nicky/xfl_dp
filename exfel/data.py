@@ -82,16 +82,15 @@ class ABCData(metaclass=ABCMeta):
 
     def get_ordered_data(self, pids=None):
         _pids = self.PIDS if pids is None else pids
-        pids_list = list(_pids)
         fut_lists = [[] for _ in _pids]
         with concurrent.futures.ProcessPoolExecutor() as executor:
-            for pid, fut_list in zip(pids_list, fut_lists):
+            for pid, fut_list in zip(_pids, fut_lists):
                 for start, stop in utils.chunkify(0,
                                                   self.size,
                                                   utils.CORES_COUNT // len(_pids) + 1):
                     fut_list.append(executor.submit(self.get_ordered_data_chunk, start, stop, pid))
-        data_list, tids_list = [], []
-        for pid, fut_list in zip(fut_lists, pids_list):
+        data_list, tids_list, pids_idxs = [], [], []
+        for idx, fut_list in enumerate(fut_lists):
             pid_data_list, pid_tids_list = [], []
             for fut in fut_list:
                 data_chunk, tids_chunk = fut.result()
@@ -101,9 +100,8 @@ class ABCData(metaclass=ABCMeta):
             if data_list:
                 data_list.append(np.concatenate(pid_data_list))
                 tids_list.append(np.concatenate(pid_tids_list))
-            else:
-                pids_list.remove(pid)
-        return data_list, tids_list, np.array(pids_list)
+                pids_idxs.append(idx)
+        return data_list, tids_list, _pids[pids_idxs]
 
     def _create_outfile(self):
         utils.make_output_dir(os.path.dirname(self.out_path))
@@ -201,16 +199,15 @@ class ABCRawData(ABCData):
 
     def get_ordered_data(self, pids=None):
         _pids = self.PIDS if pids is None else pids
-        pids_list = list(_pids)
         fut_lists = [[] for _ in _pids]
         with concurrent.futures.ProcessPoolExecutor() as executor:
-            for pid, fut_list in zip(pids_list, fut_lists):
+            for pid, fut_list in zip(_pids, fut_lists):
                 for start, stop in utils.chunkify(0,
                                                   self.size,
                                                   utils.CORES_COUNT // len(_pids) + 1):
                     fut_list.append(executor.submit(self.get_ordered_data_chunk, start, stop, pid))
-        data_list, gain_list, tids_list = [], [], []
-        for pid, fut_list in zip(pids_list, fut_lists):
+        data_list, gain_list, tids_list, pids_idxs = [], [], [], []
+        for idx, fut_list in enumerate(fut_lists):
             pid_data_list, pid_gain_list, pid_tids_list = [], [], []
             for fut in fut_list:
                 data_chunk, gain_chunk, tids_chunk = fut.result()
@@ -223,9 +220,8 @@ class ABCRawData(ABCData):
                 data_list.append(np.concatenate(pid_data_list))
                 gain_list.append(np.concatenate(pid_gain_list))
                 tids_list.append(np.concatenate(pid_tids_list))
-            else:
-                pids_list.remove(pid)
-        return data_list, gain_list, tids_list, np.array(pids_list)
+                pids_idxs.append(idx)
+        return data_list, gain_list, tids_list, _pids[pids_idxs]
 
     def _save_data(self, outfile):
         data, gain, tids, pids = self.get_data()
