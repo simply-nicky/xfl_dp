@@ -45,11 +45,12 @@ class ROI(object):
 FULL_ROI = ROI(-50, 150)
 ZERO_ROI = ROI(-50, 30).relative(FULL_ROI)
 ONE_ROI = ROI(30, 150).relative(FULL_ROI)
+REL_ROI = ROI(20, 60)
 
 class CalibParameter(object):
     def __init__(self, level):
         self.module = level * np.ones(MODULE_SHAPE)
-        self.AGIPD = level * np.ones(AGIPD_SHAPE)
+        self.agipd = level * np.ones(AGIPD_SHAPE)
 
 class GainLevel(object):
     def __init__(self, hg_level=HG_LEVEL, mg_level=MG_LEVEL, lg_level=LG_LEVEL):
@@ -62,9 +63,9 @@ class GainLevel(object):
         hg_mask = (dig_gains > self.hg_level.module).astype(np.uint8)
         return mg_mask + hg_mask
 
-    def mask_AGIPD(self, dig_gains):
-        mg_mask = (dig_gains > self.mg_level.AGIPD).astype(np.uint8)
-        hg_mask = (dig_gains > self.hg_level.AGIPD).astype(np.uint8)
+    def mask_agipd(self, dig_gains):
+        mg_mask = (dig_gains > self.mg_level.agipd).astype(np.uint8)
+        hg_mask = (dig_gains > self.hg_level.agipd).astype(np.uint8)
         return mg_mask + hg_mask
 
 def hg_calibrate(hg_data, full_roi=FULL_ROI, zero_roi=ZERO_ROI, one_roi=ONE_ROI):
@@ -74,27 +75,41 @@ def hg_calibrate(hg_data, full_roi=FULL_ROI, zero_roi=ZERO_ROI, one_roi=ONE_ROI)
     zero_peak = abs(full_roi.lower_bound)
     hist[zero_peak] = (hist[zero_peak + 1] + hist[zero_peak - 1]) / 2
     # making log histogram
-    log_hist, ADUs = np.log(hist) - np.log(hist).min(), (hg_edges[1:] + hg_edges[:-1]) / 2
+    log_hist, adus = np.log(hist) - np.log(hist).min(), (hg_edges[1:] + hg_edges[:-1]) / 2
     # finding zero photon peak
-    zero_ADU = ADUs[log_hist[zero_roi].argmax()]
+    zero_adu = adus[log_hist[zero_roi].argmax()]
     # fitting gaussian function to zero photon peak
-    fit_pars, _ = curve_fit(lambda x, amplitude, sigma: gauss(x, amplitude, zero_ADU, sigma),
-                            ADUs[zero_roi],
+    fit_pars, _ = curve_fit(lambda x, amplitude, sigma: gauss(x, amplitude, zero_adu, sigma),
+                            adus[zero_roi],
                             log_hist[zero_roi])
     # finding one photon peak
-    one_ADU = ADUs[(log_hist - gauss(ADUs, fit_pars[0], zero_ADU, fit_pars[1]))[one_roi].argmax()]
-    return zero_ADU, one_ADU
+    one_adu = adus[(log_hist - gauss(adus, fit_pars[0], zero_adu, fit_pars[1]))[one_roi].argmax()]
+    return zero_adu, one_adu
+
+def mg_calibrate(mg_data, hg_data, rel_roi=REL_ROI):
+    hg_totals = np.sum(np.array(hg_data <= 0, dtype=np.uint32), axis=0)
+    mg_totals = np.sum(np.array(mg_data <= 0, dtype=np.uint32), axis=0)
+    hg_average = np.where(hg_totals != 0, hg_data.sum(axis=0) / hg_totals, 0)
+    mg_average = np.where(mg_totals != 0, mg_data.sum(axis=0) / mg_totals, 0)
+    rel_data = np.where(mg_average != 0, hg_average / mg_average, 0)
+    rel_hist, edges = np.histogram(rel_data.ravel(), rel_roi.length, range=rel_roi.range)
+    adus = (edges[:-1] + edges[1:]) / 2
+    fit_par, _ = curve_fit(lambda x, mu, sigma: gauss(x, rel_hist.max(), mu, sigma),
+                           adus,
+                           rel_hist,
+                           bounds=([rel_roi.lower_bound, 0], [rel_roi.higher_bound, 20]))
+    return fit_par[0]
 
 def calibrate_module(data, pids, gain_levels):
-    data_list, dig_gain_list, _ = data.get_ordered_data(pids)
+    data_list, dig_gain_list, _, new_pids = data.get_ordered_data(pids)
     offset_list, gain_list = [], []
-    for data, dig_gain in zip(data_list, dig_gain_list):
-        mask = gain_levels.mask_module(dig_gain)
-        hg_data = data[mask == 0]
-        zero_ADU, one_ADU = hg_calibrate(hg_data)
-        offset_list.append(zero_ADU)
-        gain_list.append(one_ADU - zero_ADU)
-    return np.array(offset_list), np.array(gain_list)
+    for data_chunk, dig_gain_chunk in zip(data_list, dig_gain_list):
+        mask = gain_levels.mask_module(dig_gain_chunk)
+        hg_data = data_chunk[mask == 0]
+        zero_adu, one_adu = hg_calibrate(hg_data)
+        offset_list.append(zero_adu)
+        gain_list.append(one_adu - zero_adu)
+    return np.array(offset_list), np.array(gain_list), new_pids
 
 # def r_to_slice(roi, roi0):
 #     return slice(roi[0] - roi0[0], roi[1] - roi0[0])
@@ -103,7 +118,7 @@ def calibrate_module(data, pids, gain_levels):
 #     """
 #     Find one photon peak position in histogram based on fitting Gaussians.
 
-#     data - AGIPD from one memory cell (one Pulse ID)
+#     data - agipd from one memory cell (one Pulse ID)
 #     fullroi - histogram ROI of ADU values
 #     roizero - ROI of zero photon peak
 #     roione - ROI of one photon peak
@@ -123,37 +138,37 @@ def calibrate_module(data, pids, gain_levels):
 #     mu2 = xs[(hlog - gauss(xs, p1[0], mu1, p1[1]))[r_to_slice(roione, fullroi)].argmax() + roione[0] - fullroi[0]]
 #     return mu2 - mu1
 
-def relativegain(ADUs, pid, dig_gains, gainlevels, offsets, badpixels, roi=[0, 60]):
-    """
-    Return relative gain value based on histogram of High gain ADUs divided by Medium gain ADUs.
+# def relativegain(adus, pid, dig_gains, gainlevels, offsets, badpixels, roi=[0, 60]):
+#     """
+#     Return relative gain value based on histogram of High gain adus divided by Medium gain adus.
 
-    ADUs - AGIPD raw adu values of one memory cell (Pulse ID = pid)
-    pid - Pulse ID
-    dig_gains - AGIPD digital gain values
-    gainlevels - calibration gain levels
-    offsets - callibration ADU offsets
-    badpixels - bad pixels mask
-    """
-    # memory cell id
-    mid = pid // 4
-    # gain mode mask
-    gainmode = np.array([frame > gainlevels[1, mid] for frame in dig_gains], dtype=int)
-    # high gain ADUs
-    highgains = np.where((gainmode == 0) & (badpixels[0, mid] == 0), ADUs - offsets[0, mid], 0)
-    highgains[highgains < 0] = 0
-    # medium gain ADUs
-    midgains = np.where((gainmode == 1) & (badpixels[1, mid] == 0), ADUs - offsets[1, mid], 0)
-    midgains[midgains < 0] = 0
-    # Finding mean ADU value for high gain ADUs
-    htotals = np.sum(np.array(highgains != 0, dtype=int), axis=0)
-    avhgains = np.where(htotals != 0, highgains.sum(axis=0) / htotals, 0)
-    # Finding mean ADU value for high gain ADUs
-    mtotals = np.sum(np.array(midgains != 0, dtype=int), axis=0)
-    avmgains = np.where(mtotals != 0, midgains.sum(axis=0) / mtotals, 0)
-    # Division of mean high gain ADUs and medium gain ADUs gives us relative gain value
-    relgains = np.where((avhgains != 0) & (avmgains != 0), avhgains / avmgains, 0)
-    # Finding relative gain value by fitting gaussian to histgram
-    hist, bin_edges = np.histogram(relgains.ravel(), 100, range=(0.5, 100.5))
-    bin_centres = (bin_edges[:-1] + bin_edges[1:]) / 2
-    p, _ = curve_fit(lambda x, mu, sigma: gauss(x, hist.max(), mu, sigma), bin_centres[roi[0]:roi[1]], hist[roi[0]:roi[1]], bounds=([roi[0], 0], [roi[1], 10]))
-    return p[0]
+#     adus - agipd raw adu values of one memory cell (Pulse ID = pid)
+#     pid - Pulse ID
+#     dig_gains - agipd digital gain values
+#     gainlevels - calibration gain levels
+#     offsets - callibration ADU offsets
+#     badpixels - bad pixels mask
+#     """
+#     # memory cell id
+#     mid = pid // 4
+#     # gain mode mask
+#     gainmode = np.array([frame > gainlevels[1, mid] for frame in dig_gains], dtype=int)
+#     # high gain adus
+#     highgains = np.where((gainmode == 0) & (badpixels[0, mid] == 0), adus - offsets[0, mid], 0)
+#     highgains[highgains < 0] = 0
+#     # medium gain adus
+#     midgains = np.where((gainmode == 1) & (badpixels[1, mid] == 0), adus - offsets[1, mid], 0)
+#     midgains[midgains < 0] = 0
+#     # Finding mean ADU value for high gain adus
+#     htotals = np.sum(np.array(highgains != 0, dtype=int), axis=0)
+#     avhgains = np.where(htotals != 0, highgains.sum(axis=0) / htotals, 0)
+#     # Finding mean ADU value for high gain adus
+#     mtotals = np.sum(np.array(midgains != 0, dtype=int), axis=0)
+#     avmgains = np.where(mtotals != 0, midgains.sum(axis=0) / mtotals, 0)
+#     # Division of mean high gain adus and medium gain adus gives us relative gain value
+#     relgains = np.where((avhgains != 0) & (avmgains != 0), avhgains / avmgains, 0)
+#     # Finding relative gain value by fitting gaussian to histgram
+#     hist, bin_edges = np.histogram(relgains.ravel(), 100, range=(0.5, 100.5))
+#     bin_centres = (bin_edges[:-1] + bin_edges[1:]) / 2
+#     p, _ = curve_fit(lambda x, mu, sigma: gauss(x, hist.max(), mu, sigma), bin_centres[roi[0]:roi[1]], hist[roi[0]:roi[1]], bounds=([roi[0], 0], [roi[1], 10]))
+#     return p[0]

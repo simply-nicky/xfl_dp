@@ -17,17 +17,6 @@ PUPIL_ROI = (slice(750, 1040), slice(780, 1090))
 
 AGIPD_GEOM = load_crystfel_geometry(os.path.join(os.path.dirname(__file__), "agipd.geom"))
 
-def add_data_to_dset(dset, data):
-    dset.refresh()
-    dsetshape = dset.shape
-    dset.resize((dsetshape[0] + data.shape[0],) + dsetshape[1:])
-    dset[dsetshape[0]:] = data
-    dset.flush()
-
-def chunkify(start, end, thread_num=CORES_COUNT):
-    limits = np.linspace(start, end, thread_num + 1).astype(int)
-    return list(zip(limits[:-1], limits[1:]))
-
 def apply_agipd_geom(frame):
     return apply_geometry_to_data(frame, AGIPD_GEOM)
 

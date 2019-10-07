@@ -4,7 +4,6 @@ wrapper.py - a module with main data processing class implementations
 import argparse
 import os
 import concurrent.futures
-from abc import ABCMeta, abstractmethod
 import numpy as np
 import h5py
 from . import utils
@@ -17,10 +16,39 @@ RAW_TRAIN_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/trainId"
 RAW_PULSE_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/pulseId"
 GAIN_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/gain"
 
-class ABCData(metaclass=ABCMeta):
+class Pool(object):
+    def __init__(self, num_workers=utils.CORES_COUNT):
+        self.executor = concurrent.futures.ProcessPoolExecutor(max_workers=num_workers)
+        self.futures = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        return self.executor.__exit__(exc_type, exc_value, exc_tb)
+
+    def submit(self, func, *args, **kwargs):
+        self.futures.append(self.executor.submit(func, *args, **kwargs))
+
+    def shutdown(self, wait=True):
+        self.executor.shutdown(wait)
+
+    def get(self, out_dict):
+        for fut in self.futures:
+            chunk = fut.result()
+            for key in chunk:
+                out_dict[key].append(chunk[key])
+        for data in out_dict.values():
+            data = np.concatenate(data)
+        return out_dict
+
+class CheetahData(object):
     OUT_FOLDER = os.path.dirname(os.path.dirname(__file__))
     OUT_PATH = os.path.join(OUT_FOLDER, "hdf5/r{0:04d}/XFEL-r{0:04d}-c{1:02d}.h5")
     PIDS = 4 * np.arange(0, 176)
+    DATA_KEY = 'data'
+    PULSE_KEY = 'pulseId'
+    TRAIN_KEY = 'trainId'
 
     def __init__(self,
                  rnum=None,
@@ -57,51 +85,70 @@ class ABCData(metaclass=ABCMeta):
     def pulse_ids(self):
         return self.data_file[self.pulse_path]
 
-    @abstractmethod
+    @property
+    def chunks(self):
+        limits = np.linspace(0, self.size, utils.CORES_COUNT + 1).astype(int)
+        return list(zip(limits[:-1], limits[1:]))
+
+    def empty_dict(self):
+        return dict([(self.DATA_KEY, []),
+                     (self.PULSE_KEY, []),
+                     (self.TRAIN_KEY, [])])
+
+    def data_dict(self, data, pulse_ids, train_ids):
+        return dict([(self.DATA_KEY, data),
+                     (self.PULSE_KEY, pulse_ids),
+                     (self.TRAIN_KEY, train_ids)])
+
     def get_data_chunk(self, start, stop):
-        pass
+        return self.data_dict(data=self.data[start:stop],
+                              train_ids=self.train_ids[start:stop],
+                              pulse_ids=self.pulse_ids[start:stop])
 
     def get_data(self):
-        ranges = utils.chunkify(0, self.size)
-        fut_list = []
-        with concurrent.futures.ProcessPoolExecutor() as executor:
-            for start, stop in ranges:
-                fut_list.append(executor.submit(self.get_data_chunk, start, stop))
-        data_list, tids_list, pids_list = [], [], []
-        for fut in fut_list:
-            data_chunk, tids_chunk, pids_chunk = fut.result()
-            data_list.append(data_chunk)
-            tids_list.append(tids_chunk)
-            pids_list.append(pids_chunk)
-        return np.concatenate(data_list), np.concatenate(tids_list), np.concatenate(pids_list)
+        pool = Pool()
+        with pool:
+            for start, stop in self.chunks:
+                pool.submit(self.get_data_chunk, start, stop)
+        return pool.get(self.empty_dict())
+
+    def get_filtered_data_chunk(self, start, stop, limit):
+        data_chunk = self.data[start:stop]
+        pids_chunk = self.pulse_ids[start:stop]
+        tids_chunk = self.train_ids[start:stop]
+        idxs = np.where(data_chunk.max(axis=(1, 2)) > limit)
+        return self.data_dict(data=data_chunk[idxs],
+                              pulse_ids=pids_chunk[idxs],
+                              train_ids=tids_chunk[idxs])
+
+    def get_filtered_data(self, limit):
+        pool = Pool()
+        with pool:
+            for start, stop in self.chunks:
+                pool.submit(self.get_filtered_data_chunk, start, stop, limit)
+        return pool.get(self.empty_dict())
 
     def get_ordered_data_chunk(self, start, stop, pid):
-        data_chunk, tids_chunk, pids_chunk = self.get_data_chunk(start, stop)
+        data_chunk = self.data[start:stop]
+        pids_chunk = self.pulse_ids[start:stop]
+        tids_chunk = self.train_ids[start:stop]
         idxs = np.where(pids_chunk == pid)
-        return data_chunk[idxs], tids_chunk[idxs]
+        return self.data_dict(data=data_chunk[idxs],
+                              pulse_ids=pid,
+                              train_ids=tids_chunk[idxs])
 
     def get_ordered_data(self, pids=None):
-        _pids = self.PIDS if pids is None else np.array(pids)
-        fut_lists = [[] for _ in _pids]
-        with concurrent.futures.ProcessPoolExecutor() as executor:
-            for pid, fut_list in zip(_pids, fut_lists):
-                for start, stop in utils.chunkify(0,
-                                                  self.size,
-                                                  utils.CORES_COUNT // len(_pids) + 1):
-                    fut_list.append(executor.submit(self.get_ordered_data_chunk, start, stop, pid))
-        data_list, tids_list, pids_idxs = [], [], []
-        for idx, fut_list in enumerate(fut_lists):
-            pid_data_list, pid_tids_list = [], []
-            for fut in fut_list:
-                data_chunk, tids_chunk = fut.result()
-                if data_chunk.any():
-                    pid_data_list.append(data_chunk)
-                    pid_tids_list.append(tids_chunk)
-            if data_list:
-                data_list.append(np.concatenate(pid_data_list))
-                tids_list.append(np.concatenate(pid_tids_list))
-                pids_idxs.append(idx)
-        return data_list, tids_list, _pids[pids_idxs]
+        _pids = self.PIDS if pids is None else pids
+        results = []
+        for pid in _pids:
+            pool = Pool()
+            with pool:
+                for start, stop in self.chunks:
+                    pool.submit(self.get_ordered_data_chunk, start, stop, pid)
+            res = pool.get(self.empty_dict())
+            if res[self.DATA_KEY].any():
+                results.append(res)
+        return results
 
     def _create_outfile(self):
         utils.make_output_dir(os.path.dirname(self.out_path))
@@ -115,11 +162,13 @@ class ABCData(metaclass=ABCMeta):
         arg_group.create_dataset('data_type', data=self.__class__.__name__)
 
     def _save_data(self, outfile):
-        data, tids, pids = self.get_data()
+        data = self.get_data()
         data_group = outfile.create_group('data')
-        data_group.create_dataset('data', data=data, compression='gzip')
-        data_group.create_dataset('trainID', data=tids)
-        data_group.create_dataset('pulseID', data=pids)
+        for key in data:
+            if key == self.DATA_KEY:
+                data_group.create_dataset(key, data=data[key], compression='gzip')
+            else:
+                data_group.create_dataset(key, data=data[key])
 
     def save(self):
         out_file = self._create_outfile()
@@ -128,146 +177,81 @@ class ABCData(metaclass=ABCMeta):
         out_file.close()
 
     def _save_ordered_data(self, out_file, pids=None):
-        data_list, tids_list = self.get_ordered_data(pids)
+        data_list = self.get_ordered_data(pids)
         data_group = out_file.create_group('data')
-        for pid, data, tids in zip(pids, data_list, tids_list):
-            pid_group = data_group.create_group(str(pid))
-            pid_group.create_dataset('data', data=data, compression='gzip')
-            pid_group.create_dataset('trainID', data=tids)
-        data_group.create_dataset('pulseID', data=pids)
+        for data in data_list:
+            pid_group = data_group.create_group("pulseId {:d}".format(data[self.PULSE_KEY][0]))
+            for key in data:
+                if key == self.DATA_KEY:
+                    pid_group.create_dataset(key, data=data[key], compression='gzip')
+                elif key == self.PULSE_KEY:
+                    continue
+                else:
+                    pid_group.create_dataset(key, data=data[key])
 
-class Data(ABCData):
-    def get_data_chunk(self, start, stop):
-        return (self.data[start:stop],
-                self.train_ids[start:stop],
-                self.pulse_ids[start:stop])
+class RawData(CheetahData):
+    GAIN_KEY = "gain"
 
-class TrimData(ABCData):
     def __init__(self,
                  rnum=None,
                  cnum=None,
-                 limit=20000,
-                 file_path=utils.BASE_PATH,
-                 data_path=DATA_PATH,
-                 pulse_path=PULSE_PATH,
-                 train_path=TRAIN_PATH):
-        super(TrimData, self).__init__(rnum, cnum, file_path, data_path, pulse_path, train_path)
-        self.limit = limit
-
-    def get_data_chunk(self, start, stop):
-        data_chunk = self.data[start:stop]
-        pids_chunk = self.pulse_ids[start:stop]
-        tids_chunk = self.train_ids[start:stop]
-        idxs = np.where(data_chunk.max(axis=(1, 2)) > self.limit)
-        return data_chunk[idxs], tids_chunk[idxs], pids_chunk[idxs]
-
-class ABCRawData(ABCData):
-    def __init__(self,
-                 rnum=None,
-                 cnum=None,
+                 module=0,
                  file_path=utils.BASE_PATH,
                  data_path=RAW_DATA_PATH,
                  gain_path=GAIN_PATH,
                  pulse_path=RAW_PULSE_PATH,
                  train_path=RAW_TRAIN_PATH):
-        super(ABCRawData, self).__init__(rnum, cnum, file_path, data_path, pulse_path, train_path)
-        self.gain_path = gain_path
+        super(RawData, self).__init__(rnum,
+                                      cnum,
+                                      file_path.format(module),
+                                      data_path.format(module),
+                                      pulse_path.format(module),
+                                      train_path.format(module))
+        self.gain_path = gain_path.format(module)
 
     @property
     def gain(self):
         return self.data_file[self.gain_path]
 
-    def get_data(self):
-        ranges = utils.chunkify(0, self.size)
-        fut_list = []
-        with concurrent.futures.ProcessPoolExecutor() as executor:
-            for start, stop in ranges:
-                fut_list.append(executor.submit(self.get_data_chunk, start, stop))
-        data_list, gain_list, tids_list, pids_list = [], [], [], []
-        for fut in fut_list:
-            data_chunk, gain_chunk, tids_chunk, pids_chunk = fut.result()
-            data_list.append(data_chunk)
-            gain_list.append(gain_chunk)
-            tids_list.append(tids_chunk)
-            pids_list.append(pids_chunk)
-        return np.concatenate(data_list), np.concatenate(gain_list), np.concatenate(tids_list), np.concatenate(pids_list)
+    def empty_dict(self):
+        return dict([(self.DATA_KEY, []),
+                     (self.GAIN_KEY, []),
+                     (self.PULSE_KEY, []),
+                     (self.TRAIN_KEY, [])])
 
-    def get_ordered_data_chunk(self, start, stop, pid):
-        data_chunk, gain_chunk, tids_chunk, pids_chunk = self.get_data_chunk(start, stop)
-        idxs = np.where(pids_chunk == pid)
-        return data_chunk[idxs], gain_chunk[idxs], tids_chunk[idxs]
-
-    def get_ordered_data(self, pids=None):
-        _pids = self.PIDS if pids is None else np.array(pids)
-        fut_lists = [[] for _ in _pids]
-        with concurrent.futures.ProcessPoolExecutor() as executor:
-            for pid, fut_list in zip(_pids, fut_lists):
-                for start, stop in utils.chunkify(0,
-                                                  self.size,
-                                                  utils.CORES_COUNT // len(_pids) + 1):
-                    fut_list.append(executor.submit(self.get_ordered_data_chunk, start, stop, pid))
-        data_list, gain_list, tids_list, pids_idxs = [], [], [], []
-        for idx, fut_list in enumerate(fut_lists):
-            pid_data_list, pid_gain_list, pid_tids_list = [], [], []
-            for fut in fut_list:
-                data_chunk, gain_chunk, tids_chunk = fut.result()
-                if data_chunk.any():
-                    pid_data_list.append(data_chunk)
-                    pid_gain_list.append(gain_chunk)
-                    pid_tids_list.append(tids_chunk)
-            print(len(pid_data_list))
-            if pid_data_list:
-                data_list.append(np.concatenate(pid_data_list))
-                gain_list.append(np.concatenate(pid_gain_list))
-                tids_list.append(np.concatenate(pid_tids_list))
-                pids_idxs.append(idx)
-        return data_list, gain_list, tids_list, _pids[pids_idxs]
-
-    def _save_data(self, outfile):
-        data, gain, tids, pids = self.get_data()
-        data_group = outfile.create_group('data')
-        data_group.create_dataset('data', data=data, compression='gzip')
-        data_group.create_dataset('gain', data=gain, compression='gzip')
-        data_group.create_dataset('trainID', data=tids)
-        data_group.create_dataset('pulseID', data=pids)
-
-    def _save_ordered_data(self, out_file, pids=None):
-        data_list, gain_list, tids_list = self.get_ordered_data(pids)
-        data_group = out_file.create_group('data')
-        for pid, data, gain, tids in zip(pids, data_list, gain_list, tids_list):
-            pid_group = data_group.create_group(str(pid))
-            pid_group.create_dataset('data', data=data, compression='gzip')
-            pid_group.create_dataset('gain', data=gain, compression='gzip')
-            pid_group.create_dataset('trainID', data=tids)
-        data_group.create_dataset('pulseID', data=pids)
-
-class RawData(ABCRawData):
-    def get_data_chunk(self, start, stop):
-        return (self.data[start:stop],
-                self.gain[start:stop],
-                self.train_ids[start:stop],
-                self.pulse_ids[start:stop])
-
-class RawTrimData(ABCRawData):
-    def __init__(self,
-                 rnum=None,
-                 cnum=None,
-                 limit=20000,
-                 file_path=utils.BASE_PATH,
-                 data_path=RAW_DATA_PATH,
-                 gain_path=GAIN_PATH,
-                 pulse_path=RAW_PULSE_PATH,
-                 train_path=RAW_TRAIN_PATH):
-        super(RawTrimData, self).__init__(rnum, cnum, file_path, data_path, gain_path, pulse_path, train_path)
-        self.limit = limit
+    def data_dict(self, data, gain, pulse_ids, train_ids):
+        return dict([(self.DATA_KEY, data),
+                     (self.GAIN_KEY, gain),
+                     (self.PULSE_KEY, pulse_ids),
+                     (self.TRAIN_KEY, train_ids)])
 
     def get_data_chunk(self, start, stop):
+        return self.data_dict(data=self.data[start:stop],
+                              gain=self.gain[start:stop],
+                              train_ids=self.train_ids[start:stop],
+                              pulse_ids=self.pulse_ids[start:stop])
+
+    def get_filtered_data_chunk(self, start, stop, limit):
         data_chunk = self.data[start:stop]
         gain_chunk = self.gain[start:stop]
         pids_chunk = self.pulse_ids[start:stop]
         tids_chunk = self.train_ids[start:stop]
-        idxs = np.where(data_chunk.max(axis=(1, 2)) > self.limit)
-        return data_chunk[idxs], gain_chunk[idxs], tids_chunk[idxs], pids_chunk[idxs]
+        idxs = np.where(data_chunk.max(axis=(1, 2)) > limit)
+        return self.data_dict(data=data_chunk[idxs],
+                              gain=gain_chunk[idxs],
+                              pulse_ids=pids_chunk[idxs],
+                              train_ids=tids_chunk[idxs])
+
+    def get_ordered_data_chunk(self, start, stop, pid):
+        data_chunk = self.data[start:stop]
+        gain_chunk = self.gain[start:stop]
+        pids_chunk = self.pulse_ids[start:stop]
+        tids_chunk = self.train_ids[start:stop]
+        idxs = np.where(pids_chunk == pid)
+        return self.data_dict(data=data_chunk[idxs],
+                              gain=gain_chunk[idxs],
+                              pulse_ids=pid,
+                              train_ids=tids_chunk[idxs])
 
 def main():
     parser = argparse.ArgumentParser(description='Run XFEL post processing of cheetah data')
@@ -280,7 +264,7 @@ def main():
     parser.add_argument('-v', '--verbosity', action='store_true', help='increase output verbosity')
     args = parser.parse_args()
 
-    xfl_data = TrimData(args.rnum, args.cnum, args.limit)
+    xfl_data = CheetahData(args.rnum, args.cnum, args.limit)
     if args.verbosity:
         print("List of typed arguments:")
         for key, val in vars(args).items():
