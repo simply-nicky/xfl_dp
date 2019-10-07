@@ -82,24 +82,28 @@ class ABCData(metaclass=ABCMeta):
 
     def get_ordered_data(self, pids=None):
         _pids = self.PIDS if pids is None else pids
+        pids_list = list(_pids)
         fut_lists = [[] for _ in _pids]
         with concurrent.futures.ProcessPoolExecutor() as executor:
-            for pid, fut_list in zip(_pids, fut_lists):
+            for pid, fut_list in zip(pids_list, fut_lists):
                 for start, stop in utils.chunkify(0,
                                                   self.size,
                                                   utils.CORES_COUNT // len(_pids) + 1):
                     fut_list.append(executor.submit(self.get_ordered_data_chunk, start, stop, pid))
         data_list, tids_list = [], []
-        for fut_list in fut_lists:
+        for pid, fut_list in zip(fut_lists, pids_list):
             pid_data_list, pid_tids_list = [], []
             for fut in fut_list:
                 data_chunk, tids_chunk = fut.result()
                 if data_chunk.any():
                     pid_data_list.append(data_chunk)
                     pid_tids_list.append(tids_chunk)
-            data_list.append(np.concatenate(pid_data_list))
-            tids_list.append(np.concatenate(pid_tids_list))
-        return data_list, tids_list
+            if data_list:
+                data_list.append(np.concatenate(pid_data_list))
+                tids_list.append(np.concatenate(pid_tids_list))
+            else:
+                pids_list.remove(pid)
+        return data_list, tids_list, np.array(pids_list)
 
     def _create_outfile(self):
         utils.make_output_dir(os.path.dirname(self.out_path))
