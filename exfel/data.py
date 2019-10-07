@@ -193,6 +193,7 @@ class ABCRawData(ABCData):
     def get_ordered_data_chunk(self, start, stop, pid):
         data_chunk, gain_chunk, tids_chunk, pids_chunk = self.get_data_chunk(start, stop)
         idxs = np.where(pids_chunk == pid)
+        print(data_chunk.shape, idxs)
         return data_chunk[idxs], gain_chunk[idxs], tids_chunk[idxs]
 
     def get_ordered_data(self, pids=None):
