@@ -197,15 +197,16 @@ class ABCRawData(ABCData):
 
     def get_ordered_data(self, pids=None):
         _pids = self.PIDS if pids is None else pids
+        pids_list = list(_pids)
         fut_lists = [[] for _ in _pids]
         with concurrent.futures.ProcessPoolExecutor() as executor:
-            for pid, fut_list in zip(_pids, fut_lists):
+            for pid, fut_list in zip(pids_list, fut_lists):
                 for start, stop in utils.chunkify(0,
                                                   self.size,
                                                   utils.CORES_COUNT // len(_pids) + 1):
                     fut_list.append(executor.submit(self.get_ordered_data_chunk, start, stop, pid))
         data_list, gain_list, tids_list = [], [], []
-        for fut_list in fut_lists:
+        for pid, fut_list in zip(pids_list, fut_lists):
             pid_data_list, pid_gain_list, pid_tids_list = [], [], []
             for fut in fut_list:
                 data_chunk, gain_chunk, tids_chunk = fut.result()
@@ -213,10 +214,13 @@ class ABCRawData(ABCData):
                     pid_data_list.append(data_chunk)
                     pid_data_list.append(gain_chunk)
                     pid_tids_list.append(tids_chunk)
-            data_list.append(np.concatenate(pid_data_list))
-            gain_list.append(np.concatenate(pid_gain_list))
-            tids_list.append(np.concatenate(pid_tids_list))
-        return data_list, gain_list, tids_list
+            if pid_data_list and pid_gain_list and pid_gain_list:
+                data_list.append(np.concatenate(pid_data_list))
+                gain_list.append(np.concatenate(pid_gain_list))
+                tids_list.append(np.concatenate(pid_tids_list))
+            else:
+                pids_list.remove(pid)
+        return data_list, gain_list, tids_list, np.array(pids_list)
 
     def _save_data(self, outfile):
         data, gain, tids, pids = self.get_data()
