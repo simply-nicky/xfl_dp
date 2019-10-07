@@ -136,9 +136,9 @@ class ABCData(metaclass=ABCMeta):
 
 class Data(ABCData):
     def get_data_chunk(self, start, stop):
-        return (self.data[start, stop],
-                self.train_ids[start, stop],
-                self.pulse_ids[start, stop])
+        return (self.data[start:stop],
+                self.train_ids[start:stop],
+                self.pulse_ids[start:stop])
 
 class TrimData(ABCData):
     def __init__(self,
@@ -153,9 +153,9 @@ class TrimData(ABCData):
         self.limit = limit
 
     def get_data_chunk(self, start, stop):
-        data_chunk = self.data[start, stop]
-        pids_chunk = self.pulse_ids[start, stop]
-        tids_chunk = self.train_ids[start, stop]
+        data_chunk = self.data[start:stop]
+        pids_chunk = self.pulse_ids[start:stop]
+        tids_chunk = self.train_ids[start:stop]
         idxs = np.where(data_chunk.max(axis=(1, 2)) > self.limit)
         return data_chunk[idxs], tids_chunk[idxs], pids_chunk[idxs]
 
@@ -193,7 +193,6 @@ class ABCRawData(ABCData):
     def get_ordered_data_chunk(self, start, stop, pid):
         data_chunk, gain_chunk, tids_chunk, pids_chunk = self.get_data_chunk(start, stop)
         idxs = np.where(pids_chunk == pid)
-        print(data_chunk.shape, idxs)
         return data_chunk[idxs], gain_chunk[idxs], tids_chunk[idxs]
 
     def get_ordered_data(self, pids=None):
@@ -239,10 +238,10 @@ class ABCRawData(ABCData):
 
 class RawData(ABCRawData):
     def get_data_chunk(self, start, stop):
-        return (self.data[start, stop],
-                self.gain[start, stop],
-                self.train_ids[start, stop],
-                self.pulse_ids[start, stop])
+        return (self.data[start:stop],
+                self.gain[start:stop],
+                self.train_ids[start:stop],
+                self.pulse_ids[start:stop])
 
 class RawTrimData(ABCRawData):
     def __init__(self,
@@ -258,10 +257,10 @@ class RawTrimData(ABCRawData):
         self.limit = limit
 
     def get_data_chunk(self, start, stop):
-        data_chunk = self.data[start, stop]
-        gain_chunk = self.gain[start, stop]
-        pids_chunk = self.pulse_ids[start, stop]
-        tids_chunk = self.train_ids[start, stop]
+        data_chunk = self.data[start:stop]
+        gain_chunk = self.gain[start:stop]
+        pids_chunk = self.pulse_ids[start:stop]
+        tids_chunk = self.train_ids[start:stop]
         idxs = np.where(data_chunk.max(axis=(1, 2)) > self.limit)
         return data_chunk[idxs], gain_chunk[idxs], tids_chunk[idxs], pids_chunk[idxs]
 
