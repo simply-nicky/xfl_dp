@@ -18,9 +18,10 @@ def main(file_path=FILE_PATH,
                    gain_path=gain_path,
                    train_path=train_path,
                    pulse_path=pulse_path)
-    data_list, _, _ = data.get_ordered_data()
-    for cell_id, data in enumerate(data_list):
-        print("Cell ID: {0:d}, data size: {1}".format(cell_id, data.shape))
-    
+    data_list, _, _, _ = data.get_data()
+    print(data_list.shape)
+    # for cell_id, data in enumerate(data_list):
+    #     print("Cell ID: {0:d}, data size: {1}".format(cell_id, data.shape))
+
 if __name__ == "__main__":
     main()
