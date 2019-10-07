@@ -1,6 +1,6 @@
 from exfel import RawData
 
-FILE_PATH = "/gpfs/exfel/exp/MID/201802/p002200/proc/r{0:04d}/CORR-R{0:04d}-AGIPD01-S{1:05d}"
+FILE_PATH = "/gpfs/exfel/exp/MID/201802/p002200/proc/r{0:04d}/CORR-R{0:04d}-AGIPD01-S{1:05d}.h5"
 DATA_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/0CH0:xtdf/image/data"
 GAIN_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/0CH0:xtdf/image/gain"
 TRAIN_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/0CH0:xtdf/image/trainId"
