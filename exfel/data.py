@@ -309,8 +309,8 @@ class RawDataSplit(CheetahData):
                               train_ids=tids_chunk[idxs])
 
     def get_ordered_data_chunk(self, start, stop, pid):
-        data_chunk = self.data[start:stop, 0]
-        gain_chunk = self.data[start:stop, 1]
+        data_chunk = self.data[start:stop]
+        gain_chunk = self.data[start:stop]
         pids_chunk = self.pulse_ids[start:stop]
         tids_chunk = self.train_ids[start:stop]
         idxs = np.where(pids_chunk == pid)
