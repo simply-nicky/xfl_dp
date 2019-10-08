@@ -95,32 +95,25 @@ class CheetahData(object):
                      (self.PULSE_KEY, []),
                      (self.TRAIN_KEY, [])])
 
-    def data_dict(self, data, pulse_ids, train_ids):
-        return dict([(self.DATA_KEY, data),
-                     (self.PULSE_KEY, pulse_ids),
-                     (self.TRAIN_KEY, train_ids)])
-
-    def get_data_chunk(self, start, stop):
-        return self.data_dict(data=self.data[start:stop],
-                              train_ids=self.train_ids[start:stop],
-                              pulse_ids=self.pulse_ids[start:stop])
+    def data_chunk(self, start, stop):
+        return dict([self.DATA_KEY, self.data[start:stop]],
+                    [self.TRAIN_KEY, self.train_ids[start:stop]],
+                    [self.PULSE_KEY, self.pulse_ids[start:stop]])
 
     def get_data(self):
         pool = Pool()
         with pool:
             for start, stop in self.chunks:
-                pool.submit(self.get_data_chunk, start, stop)
+                pool.submit(self.data_chunk, start, stop)
         return pool.get(self.empty_dict())
 
     def get_filtered_data_chunk(self, start, stop, limit):
-        data_chunk = self.data[start:stop]
-        pids_chunk = self.pulse_ids[start:stop]
-        tids_chunk = self.train_ids[start:stop]
+        data_chunk = self.data_chunk(start, stop)
         axis = tuple(np.arange(1, self.dimensions))
-        idxs = np.where(data_chunk.max(axis=axis) > limit)
-        return self.data_dict(data=data_chunk[idxs],
-                              pulse_ids=pids_chunk[idxs],
-                              train_ids=tids_chunk[idxs])
+        idxs = np.where(data_chunk[self.DATA_KEY].max(axis=axis) > limit)
+        for key in data_chunk:
+            data_chunk[key] = data_chunk[key][idxs]
+        return data_chunk
 
     def get_filtered_data(self, limit):
         pool = Pool()
@@ -130,13 +123,11 @@ class CheetahData(object):
         return pool.get(self.empty_dict())
 
     def get_ordered_data_chunk(self, start, stop, pid):
-        data_chunk = self.data[start:stop]
-        pids_chunk = self.pulse_ids[start:stop]
-        tids_chunk = self.train_ids[start:stop]
-        idxs = np.where(pids_chunk == pid)
-        return self.data_dict(data=data_chunk[idxs],
-                              pulse_ids=np.array([pid], dtype=np.uint64),
-                              train_ids=tids_chunk[idxs])
+        data_chunk = self.data_chunk(start, stop)
+        idxs = np.where(data_chunk[self.PULSE_KEY] == pid)
+        for key in data_chunk:
+            data_chunk[key] = data_chunk[key][idxs]
+        return data_chunk
 
     def get_ordered_data(self, pids=None):
         if pids is None:
@@ -181,7 +172,7 @@ class CheetahData(object):
     def save(self):
         out_file = self._create_out_file()
         self._save_parameters(out_file)
-        self._save_data(out_file)      
+        self._save_data(out_file)
         out_file.close()
 
     def _save_ordered_data(self, out_file, pids=None):
@@ -222,40 +213,11 @@ class RawData(CheetahData):
                      (self.PULSE_KEY, []),
                      (self.TRAIN_KEY, [])])
 
-    def data_dict(self, data, gain, pulse_ids, train_ids):
-        return dict([(self.DATA_KEY, data),
-                     (self.GAIN_KEY, gain),
-                     (self.PULSE_KEY, pulse_ids),
-                     (self.TRAIN_KEY, train_ids)])
-
-    def get_data_chunk(self, start, stop):
-        return self.data_dict(data=self.data[start:stop],
-                              gain=self.gain[start:stop],
-                              train_ids=self.train_ids[start:stop],
-                              pulse_ids=self.pulse_ids[start:stop])
-
-    def get_filtered_data_chunk(self, start, stop, limit):
-        data_chunk = self.data[start:stop]
-        gain_chunk = self.gain[start:stop]
-        pids_chunk = self.pulse_ids[start:stop]
-        tids_chunk = self.train_ids[start:stop]
-        axis = tuple(np.arange(1, self.dimensions))
-        idxs = np.where(data_chunk.max(axis=axis) > limit)
-        return self.data_dict(data=data_chunk[idxs],
-                              gain=gain_chunk[idxs],
-                              pulse_ids=pids_chunk[idxs],
-                              train_ids=tids_chunk[idxs])
-
-    def get_ordered_data_chunk(self, start, stop, pid):
-        data_chunk = self.data[start:stop]
-        gain_chunk = self.gain[start:stop]
-        pids_chunk = self.pulse_ids[start:stop]
-        tids_chunk = self.train_ids[start:stop]
-        idxs = np.where(pids_chunk == pid)
-        return self.data_dict(data=data_chunk[idxs],
-                              gain=gain_chunk[idxs],
-                              pulse_ids=np.array([pid], dtype=np.uint64),
-                              train_ids=tids_chunk[idxs])
+    def data_chunk(self, start, stop):
+        return dict([self.DATA_KEY, self.data[start:stop]],
+                    [self.GAIN_KEY, self.gain[start:stop]],
+                    [self.TRAIN_KEY, self.train_ids[start:stop]],
+                    [self.PULSE_KEY, self.pulse_ids[start:stop]])
 
     def _save_parameters(self, out_file):
         arg_group = out_file.create_group('arguments')
@@ -284,40 +246,11 @@ class RawDataSplit(CheetahData):
                      (self.PULSE_KEY, []),
                      (self.TRAIN_KEY, [])])
 
-    def data_dict(self, data, gain, pulse_ids, train_ids):
-        return dict([(self.DATA_KEY, data),
-                     (self.GAIN_KEY, gain),
-                     (self.PULSE_KEY, pulse_ids),
-                     (self.TRAIN_KEY, train_ids)])
-
-    def get_data_chunk(self, start, stop):
-        return self.data_dict(data=self.data[start:stop, 0],
-                              gain=self.data[start:stop, 1],
-                              train_ids=self.train_ids[start:stop],
-                              pulse_ids=self.pulse_ids[start:stop])
-
-    def get_filtered_data_chunk(self, start, stop, limit):
-        data_chunk = self.data[start:stop, 0]
-        gain_chunk = self.data[start:stop, 1]
-        pids_chunk = self.pulse_ids[start:stop]
-        tids_chunk = self.train_ids[start:stop]
-        axis = tuple(np.arange(1, self.dimensions))
-        idxs = np.where(data_chunk.max(axis=axis) > limit)
-        return self.data_dict(data=data_chunk[idxs],
-                              gain=gain_chunk[idxs],
-                              pulse_ids=pids_chunk[idxs],
-                              train_ids=tids_chunk[idxs])
-
-    def get_ordered_data_chunk(self, start, stop, pid):
-        data_chunk = self.data[start:stop]
-        gain_chunk = self.data[start:stop]
-        pids_chunk = self.pulse_ids[start:stop]
-        tids_chunk = self.train_ids[start:stop]
-        idxs = np.where(pids_chunk == pid)
-        return self.data_dict(data=data_chunk[idxs],
-                              gain=gain_chunk[idxs],
-                              pulse_ids=np.array([pid], dtype=np.uint64),
-                              train_ids=tids_chunk[idxs])
+    def data_chunk(self, start, stop):
+        return dict([self.DATA_KEY, self.data[start:stop, 0]],
+                    [self.GAIN_KEY, self.data[start:stop, 1]],
+                    [self.TRAIN_KEY, self.train_ids[start:stop, 0]],
+                    [self.PULSE_KEY, self.pulse_ids[start:stop, 0]])
 
 def main():
     parser = argparse.ArgumentParser(description='Run XFEL post processing of cheetah data')
