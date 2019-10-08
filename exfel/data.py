@@ -141,7 +141,7 @@ class CheetahData(object):
     def get_ordered_data(self, pids=None):
         if pids is None:
             _pids = self.PIDS
-        elif isinstance(_pids, int):
+        elif isinstance(pids, int):
             _pids = list(pids)
         else:
             _pids = pids
