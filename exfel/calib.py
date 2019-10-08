@@ -85,6 +85,14 @@ class GainLevel(object):
         hg_mask = (data[utils.GAIN_KEY] > self.hg_level.agipd).astype(np.uint8)
         return mg_mask + hg_mask
 
+    def get_module_data(self, data, module_id, gain_mode):
+        mask = self.mask_module(data, module_id)
+        return data[utils.DATA_KEY][mask == gain_mode]
+
+    def get_agipd_data(self, data, gain_mode):
+        mask = self.mask_agipd(data)
+        return data[utils.DATA_KEY][mask == gain_mode]
+
 class CalibViewer(QtGui.QMainWindow):
     def __init__(self, hist, adus, filename, parent=None, size=(1280, 720)):
         super(CalibViewer, self).__init__(parent=parent, size=QtCore.QSize(size[0], size[1]))

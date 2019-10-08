@@ -7,6 +7,9 @@ from multiprocessing import cpu_count
 from cfelpyutils.crystfel_utils import load_crystfel_geometry
 from cfelpyutils.geometry_utils import apply_geometry_to_data
 
+HIGH_GAIN = 0
+MEDIUM_GAIN = 1
+LOW_GAIN = 2
 DATA_KEY = 'data'
 GAIN_KEY = 'gain'
 PULSE_KEY = 'pulseId'

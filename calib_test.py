@@ -1,4 +1,5 @@
 from exfel import RawDataSplit, GainLevel
+from exfel.utils import HIGH_GAIN
 
 FILE_PATH = "/gpfs/exfel/exp/MID/201802/p002200/raw/r0221/RAW-R0221-AGIPD{:02d}-S00000.h5"
 DATA_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/data"
@@ -17,8 +18,7 @@ def main(module_id=0,
     data = data.get_ordered_data(pids=4)
     print("Pulse ID: {0:d}, Data shape: {1}".format(data['pulseId'][0], data['data'].shape))
     gain_level = GainLevel()
-    gain_mask = gain_level.mask_module(data, module_id)
-    hg_data = data[gain_mask == 0]
+    hg_data = gain_level.get_module_data(data, module_id, HIGH_GAIN)
     print("HG_data shape: {}".format(hg_data.shape))
 
 if __name__ == "__main__":
