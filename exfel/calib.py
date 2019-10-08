@@ -77,13 +77,13 @@ class GainLevel(object):
 
     def mask_module(self, data, module_id):
         mg_mask = (data[utils.GAIN_KEY] > self.mg_level.module(module_id)).astype(np.uint8)
-        hg_mask = (data[utils.GAIN_KEY] > self.hg_level.module(module_id)).astype(np.uint8)
-        return mg_mask + hg_mask
+        lg_mask = (data[utils.GAIN_KEY] > self.lg_level.module(module_id)).astype(np.uint8)
+        return mg_mask + lg_mask
 
     def mask_agipd(self, data):
         mg_mask = (data[utils.GAIN_KEY] > self.mg_level.agipd).astype(np.uint8)
-        hg_mask = (data[utils.GAIN_KEY] > self.hg_level.agipd).astype(np.uint8)
-        return mg_mask + hg_mask
+        lg_mask = (data[utils.GAIN_KEY] > self.lg_level.agipd).astype(np.uint8)
+        return mg_mask + lg_mask
 
     def get_module_data(self, data, module_id, gain_mode):
         mask = self.mask_module(data, module_id)

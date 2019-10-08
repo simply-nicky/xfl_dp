@@ -6,7 +6,7 @@ DATA_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/data"
 TRAIN_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/trainId"
 PULSE_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/pulseId"
 
-def main(module_id=0,
+def main(module_id=14,
          file_path=FILE_PATH,
          data_path=DATA_PATH,
          pulse_path=PULSE_PATH,
