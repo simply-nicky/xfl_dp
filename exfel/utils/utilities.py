@@ -4,10 +4,13 @@ utilities.py - utility module with utility functions and constants
 import os
 import errno
 from multiprocessing import cpu_count
-import numpy as np
 from cfelpyutils.crystfel_utils import load_crystfel_geometry
 from cfelpyutils.geometry_utils import apply_geometry_to_data
 
+DATA_KEY = 'data'
+GAIN_KEY = 'gain'
+PULSE_KEY = 'pulseId'
+TRAIN_KEY = 'trainId'
 BASE_PATH = "/gpfs/exfel/u/scratch/MID/201802/p002200/cheetah/hdf5/r{0:04d}-data/XFEL-r{0:04d}-c{1:02d}.h5"
 USER_PATH = os.path.join(os.path.dirname(__file__), "../../cheetah/XFEL-r{0:04d}-c{1:02d}.cxi")
 OUT_PATH = "hdf5/r{0:04d}/XFEL-r{0:04d}-c{1:02d}.h5"
