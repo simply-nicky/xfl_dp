@@ -16,9 +16,8 @@ def main(file_path=FILE_PATH,
                    gain_path=gain_path,
                    train_path=train_path,
                    pulse_path=pulse_path)
-    data_list = data.get_ordered_data(pids=[0, 4])
-    for data in data_list:
-        print("Pulse ID: {0:d}, data size: {1}".format(data['pulseId'][0], data['data'].shape))
+    data = data.get_ordered_data(pids=[4])[0]
+    
 
 if __name__ == "__main__":
     main()
