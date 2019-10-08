@@ -107,7 +107,7 @@ class CheetahData(object):
                 pool.submit(self.data_chunk, start, stop)
         return pool.get(self.empty_dict())
 
-    def get_filtered_data_chunk(self, start, stop, limit):
+    def filtered_data_chunk(self, start, stop, limit):
         data_chunk = self.data_chunk(start, stop)
         axis = tuple(np.arange(1, self.dimensions))
         idxs = np.where(data_chunk[self.DATA_KEY].max(axis=axis) > limit)
@@ -119,10 +119,10 @@ class CheetahData(object):
         pool = Pool()
         with pool:
             for start, stop in self.chunks:
-                pool.submit(self.get_filtered_data_chunk, start, stop, limit)
+                pool.submit(self.filtered_data_chunk, start, stop, limit)
         return pool.get(self.empty_dict())
 
-    def get_ordered_data_chunk(self, start, stop, pid):
+    def ordered_data_chunk(self, start, stop, pid):
         data_chunk = self.data_chunk(start, stop)
         idxs = np.where(data_chunk[self.PULSE_KEY] == pid)
         for key in data_chunk:
@@ -141,7 +141,7 @@ class CheetahData(object):
             pool = Pool()
             with pool:
                 for start, stop in self.chunks:
-                    pool.submit(self.get_ordered_data_chunk, start, stop, pid)
+                    pool.submit(self.ordered_data_chunk, start, stop, pid)
             res = pool.get(self.empty_dict())
             if res[self.DATA_KEY].any():
                 results.append(res)
