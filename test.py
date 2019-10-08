@@ -11,14 +11,14 @@ def main(file_path=FILE_PATH,
          gain_path=GAIN_PATH,
          pulse_path=PULSE_PATH,
          train_path=TRAIN_PATH):
-    data = RawData(file_path=file_path,
-                   data_path=data_path,
-                   gain_path=gain_path,
-                   pulse_path=pulse_path,
-                   train_path=train_path)
-    print("Size: {:d}".format(data.size))
-    print("Gain size: {}".format(data.gain.shape))
-    print("Pulse ID size: {}".format(data.data.shape))
+    obj = RawData(file_path=file_path,
+                  data_path=data_path,
+                  gain_path=gain_path,
+                  pulse_path=pulse_path,
+                  train_path=train_path)
+    data_list = obj.get_ordered_data(pids=[0, 4, 8])
+    for data in data_list:
+        print("Data size: {}".format(data['data'].shape))
 
 if __name__ == "__main__":
     main()

@@ -38,36 +38,36 @@ class Pool(object):
             chunk = fut.result()
             for key in chunk:
                 out_dict[key].append(chunk[key])
-        for data in out_dict.values():
-            data = np.concatenate(data)
+        for key in out_dict:
+            out_dict[key] = np.concatenate(out_dict[key])
         return out_dict
 
 class CheetahData(object):
     OUT_FOLDER = os.path.dirname(os.path.dirname(__file__))
-    OUT_PATH = os.path.join(OUT_FOLDER, "hdf5/r{0:04d}/XFEL-r{0:04d}-c{1:02d}.h5")
     PIDS = 4 * np.arange(0, 176)
     DATA_KEY = 'data'
     PULSE_KEY = 'pulseId'
     TRAIN_KEY = 'trainId'
 
     def __init__(self,
-                 rnum=None,
-                 cnum=None,
                  file_path=utils.BASE_PATH,
                  data_path=DATA_PATH,
                  pulse_path=PULSE_PATH,
                  train_path=TRAIN_PATH):
-        self.rnum, self.cnum = rnum, cnum
-        self.file_path = file_path.format(self.rnum, self.cnum)
+        self.file_path = file_path
         self.data_path, self.pulse_path, self.train_path = data_path, pulse_path, train_path
 
     @property
     def out_path(self):
-        return self.OUT_PATH(self.rnum, self.cnum)
+        return os.path.join(self.OUT_FOLDER, "hdf5/{}".format(os.path.basename(self.file_path)))
 
     @property
     def size(self):
         return self.data.shape[0]
+
+    @property
+    def dimensions(self):
+        return len(self.data.shape)
 
     @property
     def data_file(self):
@@ -116,7 +116,8 @@ class CheetahData(object):
         data_chunk = self.data[start:stop]
         pids_chunk = self.pulse_ids[start:stop]
         tids_chunk = self.train_ids[start:stop]
-        idxs = np.where(data_chunk.max(axis=(1, 2)) > limit)
+        axis = tuple(np.arange(1, self.dimensions))
+        idxs = np.where(data_chunk.max(axis=axis) > limit)
         return self.data_dict(data=data_chunk[idxs],
                               pulse_ids=pids_chunk[idxs],
                               train_ids=tids_chunk[idxs])
@@ -134,7 +135,7 @@ class CheetahData(object):
         tids_chunk = self.train_ids[start:stop]
         idxs = np.where(pids_chunk == pid)
         return self.data_dict(data=data_chunk[idxs],
-                              pulse_ids=pid,
+                              pulse_ids=np.array([pid], dtype=np.uint64),
                               train_ids=tids_chunk[idxs])
 
     def get_ordered_data(self, pids=None):
@@ -150,20 +151,20 @@ class CheetahData(object):
                 results.append(res)
         return results
 
-    def _create_outfile(self):
+    def _create_out_file(self):
         utils.make_output_dir(os.path.dirname(self.out_path))
         return h5py.File(self.out_path, 'w')
 
-    def _save_parameters(self, outfile):
-        arg_group = outfile.create_group('arguments')
-        arg_group.create_dataset('data_file', data=np.string_(self.file_path))
-        arg_group.create_dataset('run_number', data=self.rnum)
-        arg_group.create_dataset('c_number', data=self.cnum)
-        arg_group.create_dataset('data_type', data=self.__class__.__name__)
+    def _save_parameters(self, out_file):
+        arg_group = out_file.create_group('arguments')
+        arg_group.create_dataset('file_path', data=np.string_(self.file_path))
+        arg_group.create_dataset('data_path', data=self.data_path)
+        arg_group.create_dataset('pulseId_path', data=self.pulse_path)
+        arg_group.create_dataset('trainId_path', data=self.train_path)
 
-    def _save_data(self, outfile):
+    def _save_data(self, out_file):
         data = self.get_data()
-        data_group = outfile.create_group('data')
+        data_group = out_file.create_group('data')
         for key in data:
             if key == self.DATA_KEY:
                 data_group.create_dataset(key, data=data[key], compression='gzip')
@@ -171,7 +172,7 @@ class CheetahData(object):
                 data_group.create_dataset(key, data=data[key])
 
     def save(self):
-        out_file = self._create_outfile()
+        out_file = self._create_out_file()
         self._save_parameters(out_file)
         self._save_data(out_file)      
         out_file.close()
@@ -193,21 +194,16 @@ class RawData(CheetahData):
     GAIN_KEY = "gain"
 
     def __init__(self,
-                 rnum=None,
-                 cnum=None,
-                 module=0,
                  file_path=utils.BASE_PATH,
                  data_path=RAW_DATA_PATH,
                  gain_path=GAIN_PATH,
                  pulse_path=RAW_PULSE_PATH,
                  train_path=RAW_TRAIN_PATH):
-        super(RawData, self).__init__(rnum,
-                                      cnum,
-                                      file_path.format(module),
-                                      data_path.format(module),
-                                      pulse_path.format(module),
-                                      train_path.format(module))
-        self.gain_path = gain_path.format(module)
+        super(RawData, self).__init__(file_path,
+                                      data_path,
+                                      pulse_path,
+                                      train_path)
+        self.gain_path = gain_path
 
     @property
     def gain(self):
@@ -236,7 +232,8 @@ class RawData(CheetahData):
         gain_chunk = self.gain[start:stop]
         pids_chunk = self.pulse_ids[start:stop]
         tids_chunk = self.train_ids[start:stop]
-        idxs = np.where(data_chunk.max(axis=(1, 2)) > limit)
+        axis = tuple(np.arange(1, self.dimensions))
+        idxs = np.where(data_chunk.max(axis=axis) > limit)
         return self.data_dict(data=data_chunk[idxs],
                               gain=gain_chunk[idxs],
                               pulse_ids=pids_chunk[idxs],
@@ -250,8 +247,16 @@ class RawData(CheetahData):
         idxs = np.where(pids_chunk == pid)
         return self.data_dict(data=data_chunk[idxs],
                               gain=gain_chunk[idxs],
-                              pulse_ids=pid,
+                              pulse_ids=np.array([pid], dtype=np.uint64),
                               train_ids=tids_chunk[idxs])
+
+    def _save_parameters(self, out_file):
+        arg_group = out_file.create_group('arguments')
+        arg_group.create_dataset('file_path', data=np.string_(self.file_path))
+        arg_group.create_dataset('data_path', data=self.data_path)
+        arg_group.create_dataset('gain_path', data=self.gain_path)
+        arg_group.create_dataset('pulseId_path', data=self.pulse_path)
+        arg_group.create_dataset('trainId_path', data=self.train_path)
 
 def main():
     parser = argparse.ArgumentParser(description='Run XFEL post processing of cheetah data')

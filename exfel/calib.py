@@ -2,7 +2,13 @@
 calib.py - calibration module
 """
 import numpy as np
+import pyqtgraph as pg
 from scipy.optimize import curve_fit
+
+try:
+    from PyQt5 import QtCore, QtGui
+except ImportError:
+    from PyQt4 import QtCore, QtGui
 
 MODULE_SHAPE = (512, 128)
 AGIPD_SHAPE = (8192, 128)
@@ -67,6 +73,48 @@ class GainLevel(object):
         mg_mask = (dig_gains > self.mg_level.agipd).astype(np.uint8)
         hg_mask = (dig_gains > self.hg_level.agipd).astype(np.uint8)
         return mg_mask + hg_mask
+
+class CalibViewer(QtGui.QMainWindow):
+    def __init__(self, hist, adus, filename, parent=None, size=(1280, 720)):
+        super(CalibViewer, self).__init__(parent=parent, size=QtCore.QSize(size[0], size[1]))
+        self.full_roi = ROI(adus.min(), adus.max())
+        self.zero_roi = ROI(self.full_roi.lower_bound,
+                            self.full_roi.lower_bound + 0.4 * self.full_roi.length)
+        self.one_roi = ROI(self.full_roi.higher_bound - 0.55 * self.full_roi.length,
+                           self.full_roi.higher_bound - 0.05 * self.full_roi.length)
+        self.init_ui(hist, adus, filename)
+
+    def init_ui(self, hist, adus, filename):
+        self.hbox_layout = QtGui.QHBoxLayout()
+        label_widget = QtGui.Qlabel("ADU Histogram")
+        self.hbox_layout.addWidget(label_widget)
+        plot_widget = pg.PlotWidget(name="Plot", background='w')
+        hist_plot = plot_widget.plot(adus, hist)
+        hist_plot.setPen(color=1., width=3)
+        self.zero_plot = plot_widget.plot()
+        self.zero_plot.setPen(color='b', width=2, style=QtCore.DashLine)
+        self.one_plot = plot_widget.plot()
+        self.one_plot.setPen(color='r', width=2, style=QtCore.DashLine)
+        self.hbox_layout.addWidget(plot_widget)
+        vbox = QtGui.QVBoxLayout()
+        update_button = QtGui.QPushButton("Update fit")
+        update_button.clicked.connect(self.update_fit)
+        vbox.addWidget(self.update_button)
+        export_button = QtGui.QPushButton("Export")
+        export_button.clicked.connect(self.export_data)
+        vbox.addWidget(self.export_button)
+        self.hbox_layout.addWidget(vbox)
+        self.setWindowTitle('Photon Calibration, {}'.format(filename))
+        self.show()
+
+    def update_fit(self):
+        pass
+
+    def export_data(self):
+        pass
+
+    def update_plot(self):
+        pass
 
 def hg_calibrate(hg_data, full_roi=FULL_ROI, zero_roi=ZERO_ROI, one_roi=ONE_ROI):
     # making high gain histogram
