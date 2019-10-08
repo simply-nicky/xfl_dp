@@ -14,8 +14,9 @@ def main(module_id=0,
                         data_path=data_path.format(module_id),
                         train_path=train_path.format(module_id),
                         pulse_path=pulse_path.format(module_id))
-    data = data.get_ordered_data_chunk(0, 1000, pid=4)
-    print("Pulse ID: {0:d}, Data shape: {1}".format(data['pulseId'][0], data['data'].shape))
+    print(data.data.shape)
+    # data = data.get_ordered_data_chunk(0, 1000, pid=4)
+    # print("Pulse ID: {0:d}, Data shape: {1}".format(data['pulseId'][0], data['data'].shape))
     # gain_level = GainLevel()
     # gain_mask = gain_level.mask_module(data, module_id)
     # hg_data = data[gain_mask == 0]
