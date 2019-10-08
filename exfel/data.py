@@ -96,9 +96,9 @@ class CheetahData(object):
                      (self.TRAIN_KEY, [])])
 
     def data_chunk(self, start, stop):
-        return dict([self.DATA_KEY, self.data[start:stop]],
-                    [self.TRAIN_KEY, self.train_ids[start:stop]],
-                    [self.PULSE_KEY, self.pulse_ids[start:stop]])
+        return dict([(self.DATA_KEY, self.data[start:stop]),
+                     (self.TRAIN_KEY, self.train_ids[start:stop]),
+                     (self.PULSE_KEY, self.pulse_ids[start:stop])])
 
     def get_data(self):
         pool = Pool()
@@ -214,10 +214,10 @@ class RawData(CheetahData):
                      (self.TRAIN_KEY, [])])
 
     def data_chunk(self, start, stop):
-        return dict([self.DATA_KEY, self.data[start:stop]],
-                    [self.GAIN_KEY, self.gain[start:stop]],
-                    [self.TRAIN_KEY, self.train_ids[start:stop]],
-                    [self.PULSE_KEY, self.pulse_ids[start:stop]])
+        return dict([(self.DATA_KEY, self.data[start:stop]),
+                     (self.GAIN_KEY, self.gain[start:stop]),
+                     (self.TRAIN_KEY, self.train_ids[start:stop]),
+                     (self.PULSE_KEY, self.pulse_ids[start:stop])])
 
     def _save_parameters(self, out_file):
         arg_group = out_file.create_group('arguments')
@@ -247,10 +247,10 @@ class RawDataSplit(CheetahData):
                      (self.TRAIN_KEY, [])])
 
     def data_chunk(self, start, stop):
-        return dict([self.DATA_KEY, self.data[start:stop, 0]],
-                    [self.GAIN_KEY, self.data[start:stop, 1]],
-                    [self.TRAIN_KEY, self.train_ids[start:stop, 0]],
-                    [self.PULSE_KEY, self.pulse_ids[start:stop, 0]])
+        return dict([(self.DATA_KEY, self.data[start:stop, 0]),
+                     (self.GAIN_KEY, self.data[start:stop, 1]),
+                     (self.TRAIN_KEY, self.train_ids[start:stop, 0]),
+                     (self.PULSE_KEY, self.pulse_ids[start:stop, 0])])
 
 def main():
     parser = argparse.ArgumentParser(description='Run XFEL post processing of cheetah data')
