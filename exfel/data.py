@@ -142,7 +142,7 @@ class CheetahData(object):
         if pids is None:
             _pids = self.PIDS
         elif isinstance(pids, int):
-            _pids = list(pids)
+            _pids = [pids]
         else:
             _pids = pids
         results = []
