@@ -16,10 +16,10 @@ def main(module_id=0,
                         pulse_path=pulse_path.format(module_id))
     data = data.get_ordered_data(pids=4)
     print("Pulse ID: {0:d}, Data shape: {1}".format(data['pulseId'][0], data['data'].shape))
-    # gain_level = GainLevel()
-    # gain_mask = gain_level.mask_module(data, module_id)
-    # hg_data = data[gain_mask == 0]
-    # print("HG_data shape: {}".format(hg_data.shape))
+    gain_level = GainLevel()
+    gain_mask = gain_level.mask_module(data, module_id)
+    hg_data = data[gain_mask == 0]
+    print("HG_data shape: {}".format(hg_data.shape))
 
 if __name__ == "__main__":
     main()
