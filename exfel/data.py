@@ -139,7 +139,12 @@ class CheetahData(object):
                               train_ids=tids_chunk[idxs])
 
     def get_ordered_data(self, pids=None):
-        _pids = self.PIDS if pids is None else pids
+        if pids is None:
+            _pids = self.PIDS
+        elif isinstance(_pids, int):
+            _pids = list(pids)
+        else:
+            _pids = pids
         results = []
         for pid in _pids:
             pool = Pool()
@@ -149,6 +154,8 @@ class CheetahData(object):
             res = pool.get(self.empty_dict())
             if res[self.DATA_KEY].any():
                 results.append(res)
+        if len(results) == 1:
+            results = results[0]
         return results
 
     def _create_out_file(self):

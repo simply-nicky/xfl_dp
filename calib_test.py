@@ -16,7 +16,7 @@ def main(file_path=FILE_PATH,
                    gain_path=gain_path,
                    train_path=train_path,
                    pulse_path=pulse_path)
-    data = data.get_ordered_data(pids=[4])[0]
+    data = data.get_ordered_data(pids=4)
     
 
 if __name__ == "__main__":
