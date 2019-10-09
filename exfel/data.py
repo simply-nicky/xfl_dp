@@ -43,7 +43,7 @@ class Pool(object):
         return out_dict
 
 class CheetahData(object):
-    OUT_FOLDER = os.path.dirname(os.path.dirname(__file__))
+    OUT_FOLDER = os.path.join(os.path.dirname(__file__), utils.OUT_PATH)
     PIDS = 4 * np.arange(0, 176)
     DATA_KEY = utils.DATA_KEY
     PULSE_KEY = utils.PULSE_KEY
@@ -59,7 +59,7 @@ class CheetahData(object):
 
     @property
     def out_path(self):
-        return os.path.join(self.OUT_FOLDER, "hdf5/{}".format(os.path.basename(self.file_path)))
+        return os.path.join(self.OUT_FOLDER, os.path.basename(self.file_path))
 
     @property
     def size(self):
