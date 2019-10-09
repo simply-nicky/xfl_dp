@@ -36,12 +36,13 @@ def calib_proc(module_id=14,
                        gain_path=gain_path.format(module_id),
                        train_path=train_path.format(module_id),
                        pulse_path=pulse_path.format(module_id))
-    data = raw_data.get_ordered_data(pids=4)
-    print("Pulse ID: {0:d}, Data shape: {1}".format(data['pulseId'][0], data['data'].shape))
-    hg_data = data['data'][data['gain'] == 0]
-    print("HG_data shape: {}".format(hg_data.shape))
-    zero_adu, one_adu = hg_gui_calibrate(hg_data, raw_data.data_file, full_roi=(-400, 10000))
-    print("Zero ADU: {0:.1f}, One ADU: {1:.1f}".format(zero_adu, one_adu))
+    raw_data.save_ordered(pids=4)
+    # data = raw_data.get_ordered_data(pids=4)
+    # print("Pulse ID: {0:d}, Data shape: {1}".format(data['pulseId'][0], data['data'].shape))
+    # hg_data = data['data'][data['gain'] == 0]
+    # print("HG_data shape: {}".format(hg_data.shape))
+    # zero_adu, one_adu = hg_gui_calibrate(hg_data, raw_data.data_file, full_roi=(-400, 10000))
+    # print("Zero ADU: {0:.1f}, One ADU: {1:.1f}".format(zero_adu, one_adu))
 
 if __name__ == "__main__":
     calib_proc()

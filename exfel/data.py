@@ -188,6 +188,12 @@ class CheetahData(object):
                 else:
                     pid_group.create_dataset(key, data=data[key])
 
+    def save_ordered(self, pids=None):
+        out_file = self._create_out_file()
+        self._save_parameters(out_file)
+        self._save_ordered_data(out_file, pids)
+        out_file.close()
+
 class RawData(CheetahData):
     GAIN_KEY = utils.GAIN_KEY
 
