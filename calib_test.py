@@ -1,8 +1,8 @@
 from exfel import RawDataSplit, RawData, GainLevel, hg_gui_calibrate
 from exfel.utils import HIGH_GAIN
 
-RAW_FILE_PATH = "/gpfs/exfel/exp/MID/201802/p002200/raw/r0221/RAW-R0221-AGIPD{:02d}-S00000.h5"
-PROC_FILE_PATH = "/gpfs/exfel/exp/MID/201802/p002200/proc/r0221/CORR-R0221-AGIPD{:02d}-S00000.h5"
+RAW_FILE_PATH = "/gpfs/exfel/exp/MID/201802/p002200/raw/r0283/RAW-R0283-AGIPD{:02d}-S00000.h5"
+PROC_FILE_PATH = "/gpfs/exfel/exp/MID/201802/p002200/proc/r0283/CORR-R0283-AGIPD{:02d}-S00000.h5"
 DATA_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/data"
 GAIN_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/gain"
 TRAIN_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/trainId"
@@ -40,7 +40,7 @@ def calib_proc(module_id=14,
     print("Pulse ID: {0:d}, Data shape: {1}".format(data['pulseId'][0], data['data'].shape))
     hg_data = data['data'][data['gain'] == 0]
     print("HG_data shape: {}".format(hg_data.shape))
-    zero_adu, one_adu = hg_gui_calibrate(hg_data, raw_data.data_file)
+    zero_adu, one_adu = hg_gui_calibrate(hg_data, raw_data.data_file, full_roi=(-400, 10000))
     print("Zero ADU: {0:.1f}, One ADU: {1:.1f}".format(zero_adu, one_adu))
 
 if __name__ == "__main__":

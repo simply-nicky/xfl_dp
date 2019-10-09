@@ -230,7 +230,8 @@ def hg_calibrate(hg_data, full_roi=FULL_ROI, zero_roi=ZERO_ROI, one_roi=ONE_ROI)
     one_adu = adus[(log_hist - gauss(adus, fit_pars[0], zero_adu, fit_pars[1]))[one_roi].argmax()]
     return zero_adu, one_adu
 
-def hg_gui_calibrate(hg_data, filename, full_roi=FULL_ROI):
+def hg_gui_calibrate(hg_data, filename, full_roi=FULL_ROI.bounds):
+    full_roi = ROI(full_roi[0], full_roi[1])
     hist, hg_edges = np.histogram(hg_data.ravel(), full_roi.length, range=full_roi.bounds)
     # Supressing 0 ADU value peak
     zero_peak = abs(full_roi.lower_bound)
