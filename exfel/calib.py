@@ -1,15 +1,16 @@
 """
 calib.py - calibration module
 """
+import sys
 import numpy as np
 import pyqtgraph as pg
 from scipy.optimize import curve_fit
 from . import utils
 
 try:
-    from PyQt5 import QtCore, QtGui
+    from PyQt5 import QtCore, QtGui, QtWidgets
 except ImportError:
-    from PyQt4 import QtCore, QtGui
+    from PyQt4 import QtCore, QtGui, QtWidgets
 
 MODULE_SHAPE = (512, 128)
 AGIPD_SHAPE = (8192, 128)
@@ -45,6 +46,9 @@ class ROI(object):
     @property
     def range(self):
         return (self.lower_bound, self.higher_bound)
+
+    def __index__(self):
+        return slice(int(self.lower_bound), int(self.higher_bound))
 
     def relative(self, base_roi):
         return ROI(self.lower_bound - base_roi.lower_bound,
@@ -96,44 +100,107 @@ class GainLevel(object):
 class CalibViewer(QtGui.QMainWindow):
     def __init__(self, hist, adus, filename, parent=None, size=(1280, 720)):
         super(CalibViewer, self).__init__(parent=parent, size=QtCore.QSize(size[0], size[1]))
+        self.hist, self.adus, self.filename = hist, adus, filename
         self.full_roi = ROI(adus.min(), adus.max())
         self.zero_roi = ROI(self.full_roi.lower_bound,
                             self.full_roi.lower_bound + 0.4 * self.full_roi.length)
         self.one_roi = ROI(self.full_roi.higher_bound - 0.55 * self.full_roi.length,
                            self.full_roi.higher_bound - 0.05 * self.full_roi.length)
-        self.init_ui(hist, adus, filename)
+        self.update_fit()
+        self.init_ui()
 
-    def init_ui(self, hist, adus, filename):
-        self.hbox_layout = QtGui.QHBoxLayout()
+    def init_ui(self):
+        self.vbox_layout = QtGui.QVBoxLayout()
         label_widget = QtGui.Qlabel("ADU Histogram")
-        self.hbox_layout.addWidget(label_widget)
+        self.vbox_layout.addWidget(label_widget)
         plot_widget = pg.PlotWidget(name="Plot", background='w')
-        hist_plot = plot_widget.plot(adus, hist)
+        hist_plot = plot_widget.plot(self.adus, self.hist)
         hist_plot.setPen(color=1., width=3)
-        self.zero_plot = plot_widget.plot()
+        self.zero_plot = plot_widget.plot(self.adus, gauss(self.adus,
+                                                           self.zero_fit[0],
+                                                           self.zero_adu,
+                                                           self.zero_fit[1]))
         self.zero_plot.setPen(color='b', width=2, style=QtCore.DashLine)
-        self.one_plot = plot_widget.plot()
+        self.zero_lr = pg.LinearRegionItem(values=list(self.zero_roi.range),
+                                           brush='b',
+                                           bounds=list(self.full_roi.range))
+        self.zero_lr.sigRegionChanged.connect(self.update_zero_roi)
+        plot_widget.addItem(self.zero_lr)
+        self.one_plot = plot_widget.plot(self.adus, gauss(self.adus,
+                                                          self.one_fit[0],
+                                                          self.one_adu,
+                                                          self.one_fit[1]))
         self.one_plot.setPen(color='r', width=2, style=QtCore.DashLine)
-        self.hbox_layout.addWidget(plot_widget)
-        vbox = QtGui.QVBoxLayout()
-        update_button = QtGui.QPushButton("Update fit")
-        update_button.clicked.connect(self.update_fit)
-        vbox.addWidget(self.update_button)
-        export_button = QtGui.QPushButton("Export")
-        export_button.clicked.connect(self.export_data)
-        vbox.addWidget(self.export_button)
-        self.hbox_layout.addWidget(vbox)
-        self.setWindowTitle('Photon Calibration, {}'.format(filename))
+        self.one_lr = pg.LinearRegionItem(values=list(self.one_roi.range),
+                                          brush='r',
+                                          bounds=list(self.full_roi.range))
+        self.one_lr.sigRegionChanged.connect(self.update_one_roi)
+        plot_widget.addItem(self.one_lr)
+        self.hvox_layout.addWidget(plot_widget)
+        hbox = QtGui.QHBoxLayout()
+        update_button = QtGui.QPushButton("Update Plot")
+        update_button.clicked.connect(self.update_plot)
+        hbox.addWidget(self.update_button)
+        exit_button = QtGui.QPushButton("Done")
+        exit_button.connect.clicked.connect(self.close)
+        hbox.addWidget(self.exit_button)
+        self.zero_label = QtGui.QLabel("Zero ADU: {:5.1f}".format(self.zero_adu))
+        hbox.addWidget(self.zero_label)
+        self.one_label = QtGui.QLabel("One ADU: {:5.1f}".format(self.one_adu))
+        self.vbox_layout.addWidget(hbox)
+        self.setWindowTitle('Photon Calibration, {}'.format(self.filename))
         self.show()
 
-    def update_fit(self):
-        pass
+    def update_zero_roi(self):
+        self.zero_roi = ROI(*self.zero_lr.getRegion())
 
-    def export_data(self):
-        pass
+    def update_one_roi(self):
+        self.one_roi = ROI(*self.one_lr.getRegion())
+
+    def update_fit(self):
+        zero_slice = self.zero_roi.relative(self.full_roi)
+        self.zero_adu = self.adus[self.hist[zero_slice].argmax()]
+        self.zero_fit = curve_fit(lambda x, amplitude, sigma: gauss(x,
+                                                                    amplitude,
+                                                                    self.zero_adu,
+                                                                    sigma),
+                                  self.adus[zero_slice],
+                                  self.hist[zero_slice])
+        one_slice = self.one_roi.relative(self.full_roi)
+        self.one_adu = self.adus[(self.hist - gauss(self.adus,
+                                                    self.zero_fit[0],
+                                                    self.zero_adu,
+                                                    self.zero_fit[1]))[one_slice].argmax()]
+        self.one_fit = curve_fit(lambda x, amplitude, sigma: gauss(x,
+                                                                   amplitude,
+                                                                   self.one_adu,
+                                                                   sigma),
+                                 self.adus[one_slice],
+                                 (self.hist - gauss(self.adus,
+                                                    self.zero_fit[0],
+                                                    self.zero_adu,
+                                                    self.zero_fit[1]))[one_slice])
 
     def update_plot(self):
-        pass
+        self.update_fit()
+        self.zero_plot.setData(self.adus, gauss(self.adus,
+                                                self.zero_fit[0],
+                                                self.zero_adu,
+                                                self.zero_fit[1]))
+        self.one_plot.setData(self.adus, gauss(self.adus,
+                                               self.one_fit[0],
+                                               self.one_adu,
+                                               self.one_fit[1]))
+        self.zero_label.setText("Zero ADU: {:5.1f}".format(self.zero_adu))
+        self.one_label.setText("One ADU: {:5.1f}".format(self.one_adu))
+
+def run_app(hist, adus, filename):
+    app = QtCore.QCoreApplication.instance()
+    if app is None:
+        app = QtWidgets.QApplication(sys.argv)
+    main_win = CalibViewer(hist, adus, filename)
+    app.exec_()
+    return main_win.zero_adu, main_win.one_adu
 
 def hg_calibrate(hg_data, full_roi=FULL_ROI, zero_roi=ZERO_ROI, one_roi=ONE_ROI):
     # making high gain histogram
@@ -153,13 +220,15 @@ def hg_calibrate(hg_data, full_roi=FULL_ROI, zero_roi=ZERO_ROI, one_roi=ONE_ROI)
     one_adu = adus[(log_hist - gauss(adus, fit_pars[0], zero_adu, fit_pars[1]))[one_roi].argmax()]
     return zero_adu, one_adu
 
-def hg_gui_calibrate(hg_data, full_roi=FULL_ROI):
+def hg_gui_calibrate(hg_data, filename, full_roi=FULL_ROI):
     hist, hg_edges = np.histogram(hg_data.ravel(), full_roi.length, range=full_roi.range)
     # Supressing 0 ADU value peak
     zero_peak = abs(full_roi.lower_bound)
     hist[zero_peak] = (hist[zero_peak + 1] + hist[zero_peak - 1]) / 2
     # making log histogram
     log_hist, adus = np.log(hist) - np.log(hist).min(), (hg_edges[1:] + hg_edges[:-1]) / 2
+    zero_adu, one_adu = run_app(log_hist, adus, filename)
+    return zero_adu, one_adu
 
 def mg_calibrate(mg_data, hg_data, rel_roi=REL_ROI):
     hg_totals = np.sum(np.array(hg_data <= 0, dtype=np.uint32), axis=0)
