@@ -1,24 +1,13 @@
-from exfel import RawData
+import h5py
+from exfel import hg_gui_calibrate
 
-FILE_PATH = "raw/test_file.h5"
-DATA_PATH = "/MID_DET_AGIPD1M-1/CAL/APPEND_RAW/image.data"
-GAIN_PATH = "/MID_DET_AGIPD1M-1/CAL/APPEND_RAW/image.gain"
-PULSE_PATH = "/MID_DET_AGIPD1M-1/CAL/APPEND_RAW/image.pulseId"
-TRAIN_PATH = "/MID_DET_AGIPD1M-1/CAL/APPEND_RAW/image.trainId"
+OUT_PATH = "hdf5/r{0:04d}-processed/XFEL-r{0:04d}-c{1:02d}.cxi"
+DATA_PATH = 'data/data/4'
 
-def main(file_path=FILE_PATH,
-         data_path=DATA_PATH,
-         gain_path=GAIN_PATH,
-         pulse_path=PULSE_PATH,
-         train_path=TRAIN_PATH):
-    obj = RawData(file_path=file_path,
-                  data_path=data_path,
-                  gain_path=gain_path,
-                  pulse_path=pulse_path,
-                  train_path=train_path)
-    data_list = obj.get_ordered_data(pids=[0, 4, 8])
-    for data in data_list:
-        print("Data size: {}".format(data['data'].shape))
+def main(filename=OUT_PATH.format(283, 0), data_path=DATA_PATH):
+    data = h5py.File(filename, 'r')[data_path][:]
+    zero_adu, one_adu = hg_gui_calibrate(data.ravel(), filename)
+    print("Zero ADU: {0:.1f}, One ADU: {1:.1f}".format(zero_adu, one_adu))
 
 if __name__ == "__main__":
     main()
