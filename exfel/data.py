@@ -160,8 +160,7 @@ class CheetahData(object):
         arg_group.create_dataset('pulseId_path', data=self.pulse_path)
         arg_group.create_dataset('trainId_path', data=self.train_path)
 
-    def _save_data(self, out_file):
-        data = self.get_data()
+    def _save_data(self, data, out_file):
         data_group = out_file.create_group('data')
         for key in data:
             if key == self.DATA_KEY:
@@ -172,11 +171,11 @@ class CheetahData(object):
     def save(self):
         out_file = self._create_out_file()
         self._save_parameters(out_file)
-        self._save_data(out_file)
+        data = self.get_data()
+        self._save_data(data, out_file)
         out_file.close()
 
-    def _save_ordered_data(self, out_file, pids=None):
-        data_list = self.get_ordered_data(pids)
+    def _save_data_list(self, data_list, out_file):
         data_group = out_file.create_group('data')
         for data in data_list:
             pid_group = data_group.create_group("pulseId {:d}".format(data[self.PULSE_KEY][0]))
@@ -191,7 +190,11 @@ class CheetahData(object):
     def save_ordered(self, pids=None):
         out_file = self._create_out_file()
         self._save_parameters(out_file)
-        self._save_ordered_data(out_file, pids)
+        data = self.get_ordered_data(pids)
+        if isinstance(pids, int):
+            self._save_data(data, out_file)
+        else:
+            self._save_data_list(data, out_file)
         out_file.close()
 
 class RawData(CheetahData):
