@@ -14,7 +14,7 @@ PULSE_PATH = "/instrument/pulseID"
 RAW_DATA_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/data"
 RAW_TRAIN_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/trainId"
 RAW_PULSE_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/pulseId"
-GAIN_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/gain"
+RAW_GAIN_PATH = "/INSTRUMENT/MID_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/gain"
 
 class Pool(object):
     def __init__(self, num_workers=utils.CORES_COUNT):
@@ -50,7 +50,7 @@ class CheetahData(object):
     TRAIN_KEY = utils.TRAIN_KEY
 
     def __init__(self,
-                 file_path=utils.BASE_PATH,
+                 file_path,
                  data_path=DATA_PATH,
                  pulse_path=PULSE_PATH,
                  train_path=TRAIN_PATH):
@@ -200,12 +200,7 @@ class CheetahData(object):
 class RawData(CheetahData):
     GAIN_KEY = utils.GAIN_KEY
 
-    def __init__(self,
-                 file_path=utils.BASE_PATH,
-                 data_path=RAW_DATA_PATH,
-                 gain_path=GAIN_PATH,
-                 pulse_path=RAW_PULSE_PATH,
-                 train_path=RAW_TRAIN_PATH):
+    def __init__(self, file_path, data_path, gain_path, pulse_path, train_path):
         super(RawData, self).__init__(file_path,
                                       data_path,
                                       pulse_path,
@@ -236,14 +231,25 @@ class RawData(CheetahData):
         arg_group.create_dataset('pulseId_path', data=self.pulse_path)
         arg_group.create_dataset('trainId_path', data=self.train_path)
 
+class RawModuleData(RawData):
+    def __init__(self,
+                 module_id,
+                 file_path,
+                 data_path=RAW_DATA_PATH,
+                 gain_path=RAW_GAIN_PATH,
+                 pulse_path=RAW_PULSE_PATH,
+                 train_path=RAW_TRAIN_PATH):
+        super(RawModuleData, self).__init__(file_path.format(module_id),
+                                            data_path.format(module_id),
+                                            gain_path.format(module_id),
+                                            pulse_path.format(module_id),
+                                            train_path.format(module_id))
+        self.module_id = module_id
+
 class RawDataSplit(CheetahData):
     GAIN_KEY = utils.GAIN_KEY
 
-    def __init__(self,
-                 file_path=utils.BASE_PATH,
-                 data_path=RAW_DATA_PATH,
-                 pulse_path=RAW_PULSE_PATH,
-                 train_path=RAW_TRAIN_PATH):
+    def __init__(self, file_path, data_path, pulse_path, train_path):
         super(RawDataSplit, self).__init__(file_path=file_path,
                                            data_path=data_path,
                                            pulse_path=pulse_path,
