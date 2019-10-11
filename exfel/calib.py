@@ -56,53 +56,15 @@ class ROI(object):
                    self.higher_bound - base_roi.lower_bound)
 
 FULL_ROI = ROI(-50, 150)
-ZERO_ROI = ROI(-50, 30).relative_roi(FULL_ROI)
-ONE_ROI = ROI(30, 150).relative_roi(FULL_ROI)
+ZERO_ROI = ROI(-50, 50)
+ONE_ROI = ROI(30, 100)
 REL_ROI = ROI(20, 60)
 
-class CalibParameter(object):
-    def __init__(self, level):
-        if isinstance(level, (int, float)):
-            self.agipd = level * np.ones(AGIPD_SHAPE)
-        elif isinstance(level, np.ndarray) and level.shape == MODULE_SHAPE:
-            self.agipd = np.tile(level, (MODULES_NUM, 1))
-        elif isinstance(level, np.ndarray) and level.shape == AGIPD_SHAPE:
-            self.agipd = level
-        else:
-            raise ValueError('Invalid level value')
-
-    def module(self, module_id):
-        return self.agipd[module_id*MODULE_SHAPE[0]:(module_id+1)*MODULE_SHAPE[0]]
-
-class GainLevel(object):
-    def __init__(self, hg_level=HG_LEVEL, mg_level=MG_LEVEL, lg_level=LG_LEVEL):
-        self.hg_level = CalibParameter(hg_level)
-        self.mg_level = CalibParameter(mg_level)
-        self.lg_level = CalibParameter(lg_level)
-
-    def mask_module(self, data, module_id):
-        mg_mask = (data[utils.GAIN_KEY] > self.mg_level.module(module_id)).astype(np.uint8)
-        lg_mask = (data[utils.GAIN_KEY] > self.lg_level.module(module_id)).astype(np.uint8)
-        return mg_mask + lg_mask
-
-    def mask_agipd(self, data):
-        mg_mask = (data[utils.GAIN_KEY] > self.mg_level.agipd).astype(np.uint8)
-        lg_mask = (data[utils.GAIN_KEY] > self.lg_level.agipd).astype(np.uint8)
-        return mg_mask + lg_mask
-
-    def get_module_data(self, data, module_id, gain_mode):
-        mask = self.mask_module(data, module_id)
-        return data[utils.DATA_KEY][mask == gain_mode]
-
-    def get_agipd_data(self, data, gain_mode):
-        mask = self.mask_agipd(data)
-        return data[utils.DATA_KEY][mask == gain_mode]
-
 class CalibViewer(QtGui.QWidget):
-    def __init__(self, hist, adus, filename, parent=None):
+    def __init__(self, hist, adus, parent=None):
         super(CalibViewer, self).__init__(parent=parent)
-        self.hist, self.adus, self.filename = hist, adus, filename
-        self.full_roi = ROI(adus.min(), adus.max())
+        self.hist, self.adus = hist, adus
+        self.full_roi = ROI(self.adus.min(), self.adus.max())
         self.zero_roi = ROI(self.full_roi.lower_bound,
                             self.full_roi.lower_bound + 0.4 * self.full_roi.length)
         self.one_roi = ROI(self.full_roi.higher_bound - 0.55 * self.full_roi.length,
@@ -160,7 +122,7 @@ class CalibViewer(QtGui.QWidget):
         self.vbox_layout.addLayout(hbox)
         self.setLayout(self.vbox_layout)
         self.setGeometry(0, 0, 1280, 720)
-        self.setWindowTitle('Photon Calibration, {}'.format(self.filename))
+        self.setWindowTitle('Photon Calibration')
         self.show()
 
     def update_zero_roi(self):
@@ -204,64 +166,101 @@ class CalibViewer(QtGui.QWidget):
         self.zero_label.setText("Zero ADU: {:5.1f}".format(self.zero_adu))
         self.one_label.setText("One ADU: {:5.1f}".format(self.one_adu))
 
-def run_app(hist, adus, filename):
+class CalibAGIPD(object):
+    def __init__(self, level):
+        if isinstance(level, (int, float)):
+            self.agipd = level * np.ones(AGIPD_SHAPE)
+        elif isinstance(level, np.ndarray) and level.shape == MODULE_SHAPE:
+            self.agipd = np.tile(level, (MODULES_NUM, 1))
+        elif isinstance(level, np.ndarray) and level.shape == AGIPD_SHAPE:
+            self.agipd = level
+        else:
+            raise ValueError('Invalid level value')
+
+    def module(self, module_id):
+        return self.agipd[module_id*MODULE_SHAPE[0]:(module_id+1)*MODULE_SHAPE[0]]
+
+class DarkCalib(object):
+    def __init__(self, offset, gain_level, bad_mask):
+        self.offset, self.gain_level, self.bad_mask = offset, gain_level, bad_mask
+
+    @property
+    def bad_mask_inv(self):
+        return 1 - self.bad_mask
+
+class DarkCalibTotal(DarkCalib):
+    def calib_data(self, gain_mode, pid):
+        return super(DarkCalibTotal, self).__init__(self.offset[gain_mode, pid],
+                                                    self.gain_level[gain_mode, pid],
+                                                    self.bad_mask[gain_mode, pid])
+
+class CalibData(object):
+    def __init__(self, data, dark_calib):
+        self.raw_data, self.raw_gain = data[utils.DATA_KEY], data[utils.GAIN_KEY]
+        self.pid, self.train_id = data[utils.PULSE_KEY][0], data[utils.TRAIN_KEY]
+        self.hg_calib = dark_calib.calib_data(utils.HIGH_GAIN, self.pid)
+        self.mg_calib = dark_calib.calib_data(utils.MEDIUM_GAIN, self.pid)
+
+    @property
+    def hg_mask(self):
+        gain_mask = self.raw_gain < self.mg_calib.gain_level
+        return gain_mask & self.hg_calib.bad_mask_inv
+
+    @property
+    def mg_mask(self):
+        gain_mask = self.raw_gain > self.mg_calib.gain_level
+        return gain_mask & self.mg_calib.bad_mask_inv
+
+    @property
+    def hg_data(self):
+        return (self.raw_data - self.hg_calib.offset)[self.hg_mask]
+
+    @property
+    def mg_data(self):
+        return (self.raw_data - self.mg_calib.offset)[self.mg_mask]
+
+    def hg_histogram(self, roi=(-50, 150)):
+        roi_obj = ROI(roi[0], roi[1])
+        hist, hg_edges = np.histogram(self.hg_data, roi_obj.length, range=roi_obj.bounds)
+        zero_peak = abs(roi_obj.lower_bound)
+        hist[zero_peak] = (hist[zero_peak + 1] + hist[zero_peak - 1]) / 2
+        log_hist, adus = np.log(hist) - np.log(hist).min(), (hg_edges[1:] + hg_edges[:-1]) / 2
+        return log_hist, adus
+
+    def hg_calibrate_gui(self, roi=(-50, 150)):
+        hist, adus = self.hg_histogram(roi)
+        zero_adu, one_adu = run_app(hist, adus)
+        return zero_adu, one_adu
+
+    def hg_calibrate(self, full_roi=(-50, 150), zero_roi=(-50, 50), one_roi=(30, 100)):
+        hist, adus = self.hg_histogram(full_roi)
+        zero_slice = slice(int(zero_roi[0] - full_roi[0]), int(zero_roi[1] - full_roi[0]))
+        zero_adu = adus[hist[zero_slice].argmax()]
+        zero_fit, _ = curve_fit(lambda x, amplitude, sigma: gauss(x, amplitude, zero_adu, sigma),
+                                adus[zero_slice],
+                                hist[zero_slice])
+        one_slice = slice(int(one_roi[0] - full_roi[0]), int(one_roi[1] - full_roi[0]))
+        one_adu = adus[one_slice][(hist - gauss(adus, zero_fit[0], zero_adu, zero_fit[1]))[one_slice].argmax()]
+        return zero_adu, one_adu
+
+    def mg_calibrate(self, rel_roi=(20, 60)):
+        hg_totals = np.sum(np.array(self.hg_data <= 0, dtype=np.uint32), axis=0)
+        mg_totals = np.sum(np.array(self.mg_data <= 0, dtype=np.uint32), axis=0)
+        hg_average = np.where(hg_totals != 0, self.hg_data.sum(axis=0) / hg_totals, 0)
+        mg_average = np.where(mg_totals != 0, self.mg_data.sum(axis=0) / mg_totals, 0)
+        rel_data = np.where(mg_average != 0, hg_average / mg_average, 0)
+        rel_hist, edges = np.histogram(rel_data.ravel(), rel_roi[1] - rel_roi[0], range=rel_roi)
+        adus = (edges[:-1] + edges[1:]) / 2
+        rel_fit, _ = curve_fit(lambda x, mu, sigma: gauss(x, rel_hist.max(), mu, sigma),
+                               adus,
+                               rel_hist,
+                               bounds=([rel_roi[0], 0], [rel_roi[1], 20]))
+        return rel_fit[0]
+
+def run_app(hist, adus):
     app = QtCore.QCoreApplication.instance()
     if app is None:
         app = QtWidgets.QApplication(sys.argv)
-    main_win = CalibViewer(hist, adus, filename)
+    main_win = CalibViewer(hist, adus)
     app.exec_()
     return main_win.zero_adu, main_win.one_adu
-
-def hg_calibrate(hg_data, full_roi=FULL_ROI, zero_roi=ZERO_ROI, one_roi=ONE_ROI):
-    # making high gain histogram
-    hist, hg_edges = np.histogram(hg_data.ravel(), full_roi.length, range=full_roi.bounds)
-    # Supressing 0 ADU value peak
-    zero_peak = abs(full_roi.lower_bound)
-    hist[zero_peak] = (hist[zero_peak + 1] + hist[zero_peak - 1]) / 2
-    # making log histogram
-    log_hist, adus = np.log(hist) - np.log(hist).min(), (hg_edges[1:] + hg_edges[:-1]) / 2
-    # finding zero photon peak
-    zero_adu = adus[log_hist[zero_roi].argmax()]
-    # fitting gaussian function to zero photon peak
-    fit_pars, _ = curve_fit(lambda x, amplitude, sigma: gauss(x, amplitude, zero_adu, sigma),
-                            adus[zero_roi],
-                            log_hist[zero_roi])
-    # finding one photon peak
-    one_adu = adus[(log_hist - gauss(adus, fit_pars[0], zero_adu, fit_pars[1]))[one_roi].argmax()]
-    return zero_adu, one_adu
-
-def hg_gui_calibrate(hg_data, filename, full_roi=FULL_ROI.bounds):
-    full_roi = ROI(full_roi[0], full_roi[1])
-    hist, hg_edges = np.histogram(hg_data.ravel(), full_roi.length, range=full_roi.bounds)
-    # Supressing 0 ADU value peak
-    zero_peak = abs(full_roi.lower_bound)
-    hist[zero_peak] = (hist[zero_peak + 1] + hist[zero_peak - 1]) / 2
-    # making log histogram
-    log_hist, adus = np.log(hist) - np.log(hist).min(), (hg_edges[1:] + hg_edges[:-1]) / 2
-    zero_adu, one_adu = run_app(log_hist, adus, filename)
-    return zero_adu, one_adu
-
-def mg_calibrate(mg_data, hg_data, rel_roi=REL_ROI):
-    hg_totals = np.sum(np.array(hg_data <= 0, dtype=np.uint32), axis=0)
-    mg_totals = np.sum(np.array(mg_data <= 0, dtype=np.uint32), axis=0)
-    hg_average = np.where(hg_totals != 0, hg_data.sum(axis=0) / hg_totals, 0)
-    mg_average = np.where(mg_totals != 0, mg_data.sum(axis=0) / mg_totals, 0)
-    rel_data = np.where(mg_average != 0, hg_average / mg_average, 0)
-    rel_hist, edges = np.histogram(rel_data.ravel(), rel_roi.length, range=rel_roi.bounds)
-    adus = (edges[:-1] + edges[1:]) / 2
-    fit_par, _ = curve_fit(lambda x, mu, sigma: gauss(x, rel_hist.max(), mu, sigma),
-                           adus,
-                           rel_hist,
-                           bounds=([rel_roi.lower_bound, 0], [rel_roi.higher_bound, 20]))
-    return fit_par[0]
-
-def calibrate_module(data, pids, gain_levels):
-    data_list, dig_gain_list, _, new_pids = data.get_ordered_data(pids)
-    offset_list, gain_list = [], []
-    for data_chunk, dig_gain_chunk in zip(data_list, dig_gain_list):
-        mask = gain_levels.mask_module(dig_gain_chunk)
-        hg_data = data_chunk[mask == 0]
-        zero_adu, one_adu = hg_calibrate(hg_data)
-        offset_list.append(zero_adu)
-        gain_list.append(one_adu - zero_adu)
-    return np.array(offset_list), np.array(gain_list), new_pids

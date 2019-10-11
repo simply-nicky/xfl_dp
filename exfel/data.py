@@ -43,7 +43,7 @@ class Pool(object):
         return out_dict
 
 class CheetahData(object):
-    OUT_FOLDER = os.path.join(os.path.dirname(__file__), utils.OUT_PATH)
+    OUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), utils.OUT_PATH)
     PIDS = 4 * np.arange(0, 176)
     DATA_KEY = utils.DATA_KEY
     PULSE_KEY = utils.PULSE_KEY

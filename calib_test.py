@@ -25,6 +25,20 @@ def calib_raw(module_id=14,
     zero_adu, one_adu = hg_gui_calibrate(hg_data, raw_data.data_file)
     print("Zero ADU: {0:.1f}, One ADU: {1:.1f}".format(zero_adu, one_adu))
 
+def proc_save(module_id=14,
+              file_path=PROC_FILE_PATH,
+              data_path=DATA_PATH,
+              gain_path=GAIN_PATH,
+              pulse_path=PULSE_PATH,
+              train_path=TRAIN_PATH):
+    raw_data = RawData(file_path=file_path.format(module_id),
+                       data_path=data_path.format(module_id),
+                       gain_path=gain_path.format(module_id),
+                       train_path=train_path.format(module_id),
+                       pulse_path=pulse_path.format(module_id))
+    raw_data.save_ordered(pids=4)
+    print("File saved at location: {}".format(raw_data.out_path))
+
 def calib_proc(module_id=14,
                file_path=PROC_FILE_PATH,
                data_path=DATA_PATH,
@@ -36,13 +50,12 @@ def calib_proc(module_id=14,
                        gain_path=gain_path.format(module_id),
                        train_path=train_path.format(module_id),
                        pulse_path=pulse_path.format(module_id))
-    raw_data.save_ordered(pids=4)
-    # data = raw_data.get_ordered_data(pids=4)
-    # print("Pulse ID: {0:d}, Data shape: {1}".format(data['pulseId'][0], data['data'].shape))
-    # hg_data = data['data'][data['gain'] == 0]
-    # print("HG_data shape: {}".format(hg_data.shape))
-    # zero_adu, one_adu = hg_gui_calibrate(hg_data, raw_data.data_file, full_roi=(-400, 10000))
-    # print("Zero ADU: {0:.1f}, One ADU: {1:.1f}".format(zero_adu, one_adu))
+    data = raw_data.get_ordered_data(pids=4)
+    print("Pulse ID: {0:d}, Data shape: {1}".format(data['pulseId'][0], data['data'].shape))
+    hg_data = data['data'][data['gain'] == 0]
+    print("HG_data shape: {}".format(hg_data.shape))
+    zero_adu, one_adu = hg_gui_calibrate(hg_data, raw_data.data_file, full_roi=(-400, 10000))
+    print("Zero ADU: {0:.1f}, One ADU: {1:.1f}".format(zero_adu, one_adu))
 
 if __name__ == "__main__":
     calib_proc()
