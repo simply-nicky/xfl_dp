@@ -9,7 +9,7 @@ GAIN_PATH = "/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/gain"
 TRAIN_PATH = "/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/trainId"
 PULSE_PATH = "/INSTRUMENT/SPB_DET_AGIPD1M-1/DET/{:d}CH0:xtdf/image/pulseId"
 
-def calib_raw(module_id=14,
+def calib_raw(module_id=0,
               file_path=RAW_FILE_PATH,
               calib_path=DARK_CALIB_PATH,
               data_path=DATA_PATH,
