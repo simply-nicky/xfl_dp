@@ -2,6 +2,7 @@
 calib.py - calibration module
 """
 import sys
+import h5py
 import numpy as np
 import pyqtgraph as pg
 from scipy.optimize import curve_fit
@@ -12,15 +13,13 @@ try:
 except ImportError:
     from PyQt4 import QtCore, QtGui, QtWidgets
 
-MODULE_SHAPE = (512, 128)
-AGIPD_SHAPE = (8192, 128)
 MODULES_NUM = 16
-HG_LEVEL = 0
-MG_LEVEL = 6000
-LG_LEVEL = 32000
 HG_GAIN = 1 / 68.8
 MG_GAIN = 1 / 1.376
 LG_GAIN = 5 / 1.376
+OFFSET_KEY = "AnalogOffset"
+BADMASK_KEY = "Badpixel"
+GAIN_LEVEL_KEY = "DigitalGainLevel"
 
 def gauss(arg, amplitude, mu, sigma):
     """
@@ -166,33 +165,33 @@ class CalibViewer(QtGui.QWidget):
         self.zero_label.setText("Zero ADU: {:5.1f}".format(self.zero_adu))
         self.one_label.setText("One ADU: {:5.1f}".format(self.one_adu))
 
-class CalibAGIPD(object):
-    def __init__(self, level):
-        if isinstance(level, (int, float)):
-            self.agipd = level * np.ones(AGIPD_SHAPE)
-        elif isinstance(level, np.ndarray) and level.shape == MODULE_SHAPE:
-            self.agipd = np.tile(level, (MODULES_NUM, 1))
-        elif isinstance(level, np.ndarray) and level.shape == AGIPD_SHAPE:
-            self.agipd = level
-        else:
-            raise ValueError('Invalid level value')
-
-    def module(self, module_id):
-        return self.agipd[module_id*MODULE_SHAPE[0]:(module_id+1)*MODULE_SHAPE[0]]
+def run_app(hist, adus):
+    app = QtCore.QCoreApplication.instance()
+    if app is None:
+        app = QtWidgets.QApplication(sys.argv)
+    main_win = CalibViewer(hist, adus)
+    app.exec_()
+    return main_win.zero_adu, main_win.one_adu
 
 class DarkCalib(object):
-    def __init__(self, offset, gain_level, bad_mask):
-        self.offset, self.gain_level, self.bad_mask = offset, gain_level, bad_mask
+    OFFSET_KEY = OFFSET_KEY
+    BADMASK_KEY = BADMASK_KEY
+    GAIN_LEVEL_KEY = GAIN_LEVEL_KEY
 
-    @property
-    def bad_mask_inv(self):
-        return 1 - self.bad_mask
+    def __init__(self, filename):
+        self.data_file = h5py.File(filename, 'r')
 
-class DarkCalibTotal(DarkCalib):
-    def calib_data(self, gain_mode, pid):
-        return super(DarkCalibTotal, self).__init__(self.offset[gain_mode, pid],
-                                                    self.gain_level[gain_mode, pid],
-                                                    self.bad_mask[gain_mode, pid])
+    def offset(self, gain_mode, pid):
+        return self.data_file[self.OFFSET_KEY][gain_mode, pid]
+
+    def bad_mask(self, gain_mode, pid):
+        return self.data_file[self.BADMASK_KEY][gain_mode, pid]
+
+    def bad_mask_inv(self, gain_mode, pid):
+        return 1 - self.bad_mask(gain_mode, pid)
+
+    def gain_level(self, gain_mode, pid):
+        return self.data_file[self.GAIN_LEVEL_KEY][gain_mode, pid]
 
 class CalibData(object):
     def __init__(self, data, dark_calib):
@@ -256,11 +255,3 @@ class CalibData(object):
                                rel_hist,
                                bounds=([rel_roi[0], 0], [rel_roi[1], 20]))
         return rel_fit[0]
-
-def run_app(hist, adus):
-    app = QtCore.QCoreApplication.instance()
-    if app is None:
-        app = QtWidgets.QApplication(sys.argv)
-    main_win = CalibViewer(hist, adus)
-    app.exec_()
-    return main_win.zero_adu, main_win.one_adu
