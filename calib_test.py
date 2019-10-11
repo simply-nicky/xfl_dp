@@ -1,4 +1,4 @@
-from exfel import RawModuleData, RawData, DarkCalib, CalibData
+from exfel import RawModuleJoined, RawData, DarkCalib, CalibData
 from exfel.utils import HIGH_GAIN
 
 RAW_FILE_PATH = "/gpfs/petra3/scratch/alireza2/r0099/RAW-R0099-AGIPD{:02d}-S00003.h5"
@@ -15,11 +15,11 @@ def calib_raw(module_id=0,
               data_path=DATA_PATH,
               pulse_path=PULSE_PATH,
               train_path=TRAIN_PATH):
-    raw_data = RawModuleData(module_id=module_id,
-                             file_path=file_path,
-                             data_path=data_path,
-                             train_path=train_path,
-                             pulse_path=pulse_path)
+    raw_data = RawModuleJoined(module_id=module_id,
+                               file_path=file_path,
+                               data_path=data_path,
+                               train_path=train_path,
+                               pulse_path=pulse_path)
     data = raw_data.get_ordered_data(pids=4)
     print("Pulse ID: {0:d}, Data shape: {1}".format(data['pulseId'][0], data['data'].shape))
     dark_calib = DarkCalib(calib_path)

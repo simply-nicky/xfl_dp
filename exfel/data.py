@@ -246,11 +246,11 @@ class RawModuleData(RawData):
                                             train_path.format(module_id))
         self.module_id = module_id
 
-class RawDataSplit(CheetahData):
+class RawDataJoined(CheetahData):
     GAIN_KEY = utils.GAIN_KEY
 
     def __init__(self, file_path, data_path, pulse_path, train_path):
-        super(RawDataSplit, self).__init__(file_path=file_path,
+        super(RawDataJoined, self).__init__(file_path=file_path,
                                            data_path=data_path,
                                            pulse_path=pulse_path,
                                            train_path=train_path)
@@ -266,6 +266,21 @@ class RawDataSplit(CheetahData):
                      (self.GAIN_KEY, self.data[start:stop, 1]),
                      (self.TRAIN_KEY, self.train_ids[start:stop, 0]),
                      (self.PULSE_KEY, self.pulse_ids[start:stop, 0])])
+
+class RawModuleJoined(RawDataJoined):
+    def __init__(self,
+                 module_id,
+                 file_path,
+                 data_path=RAW_DATA_PATH,
+                 gain_path=RAW_GAIN_PATH,
+                 pulse_path=RAW_PULSE_PATH,
+                 train_path=RAW_TRAIN_PATH):
+        super(RawModuleJoined, self).__init__(file_path.format(module_id),
+                                              data_path.format(module_id),
+                                              gain_path.format(module_id),
+                                              pulse_path.format(module_id),
+                                              train_path.format(module_id))
+        self.module_id = module_id
 
 def main():
     parser = argparse.ArgumentParser(description='Run XFEL post processing of cheetah data')
