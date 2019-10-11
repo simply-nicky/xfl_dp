@@ -272,12 +272,10 @@ class RawModuleJoined(RawDataJoined):
                  module_id,
                  file_path,
                  data_path=RAW_DATA_PATH,
-                 gain_path=RAW_GAIN_PATH,
                  pulse_path=RAW_PULSE_PATH,
                  train_path=RAW_TRAIN_PATH):
         super(RawModuleJoined, self).__init__(file_path.format(module_id),
                                               data_path.format(module_id),
-                                              gain_path.format(module_id),
                                               pulse_path.format(module_id),
                                               train_path.format(module_id))
         self.module_id = module_id

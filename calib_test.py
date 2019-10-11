@@ -1,5 +1,4 @@
 from exfel import RawModuleJoined, RawData, DarkCalib, CalibData
-from exfel.utils import HIGH_GAIN
 
 RAW_FILE_PATH = "/gpfs/petra3/scratch/alireza2/r0099/RAW-R0099-AGIPD{:02d}-S00003.h5"
 DARK_CALIB_PATH = "/gpfs/petra3/scratch/alireza2/scripts/r0096-r0097-r0098/Cheetah-AGIPD{:02d}-calib.h5"
