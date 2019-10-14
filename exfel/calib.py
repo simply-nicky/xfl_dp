@@ -73,6 +73,14 @@ class CalibViewer(QtGui.QWidget):
         self.update_fit()
         self.init_ui()
 
+    @property
+    def zero_adu(self):
+        return self.zero_fit[1]
+
+    @property
+    def one_adu(self):
+        return self.one_fit[1]
+
     def init_ui(self):
         self.vbox_layout = QtGui.QVBoxLayout()
         label_widget = QtGui.QLabel("ADU Histogram")
@@ -86,8 +94,8 @@ class CalibViewer(QtGui.QWidget):
         self.zero_plot = plot_widget.plot(self.adus,
                                           gauss(self.adus,
                                                 self.zero_fit[0],
-                                                self.zero_adu,
-                                                self.zero_fit[1]),
+                                                self.zero_fit[1],
+                                                self.zero_fit[2]),
                                           antialias=True)
         self.zero_plot.setPen(color='b', width=2, style=QtCore.Qt.DashLine)
         self.zero_lr = pg.LinearRegionItem(values=list(self.zero_roi.bounds),
@@ -98,8 +106,8 @@ class CalibViewer(QtGui.QWidget):
         self.one_plot = plot_widget.plot(self.adus,
                                          gauss(self.adus,
                                                self.one_fit[0],
-                                               self.one_adu,
-                                               self.one_fit[1]),
+                                               self.one_fit[1],
+                                               self.one_fit[2]),
                                          antialias=True)
         self.one_plot.setPen(color='r', width=2, style=QtCore.Qt.DashLine)
         self.one_lr = pg.LinearRegionItem(values=list(self.one_roi.bounds),
@@ -134,35 +142,32 @@ class CalibViewer(QtGui.QWidget):
 
     def update_fit(self):
         zero_slice = self.zero_roi.relative_roi(self.full_roi).index
-        self.zero_adu = self.adus[zero_slice][self.hist[zero_slice].argmax()]
-        self.zero_fit, _ = curve_fit(lambda x, amplitude, sigma: gauss(x,
-                                                                       amplitude,
-                                                                       self.zero_adu,
-                                                                       sigma),
+        zero_max = self.adus[zero_slice][self.hist[zero_slice].argmax()]
+        self.zero_fit, _ = curve_fit(gauss,
                                      self.adus[zero_slice],
-                                     self.hist[zero_slice])
+                                     self.hist[zero_slice],
+                                     bounds=([0, zero_max - 10, 0], [np.inf, zero_max + 10, np.inf]))
         one_slice = self.one_roi.relative_roi(self.full_roi).index
         self.one_hist = (self.hist - gauss(self.adus,
                                            self.zero_fit[0],
-                                           self.zero_adu,
-                                           self.zero_fit[1]))
-        max_adu = self.adus[one_slice][self.one_hist[one_slice].argmax()]
-        fit, _ = curve_fit(gauss,
-                           self.adus[one_slice],
-                           self.one_hist[one_slice],
-                           bounds=([0, max_adu - 5, 0], [np.inf, max_adu + 5, np.inf]))
-        self.one_adu, self.one_fit = fit[1], [fit[0], fit[2]]
+                                           self.zero_fit[1],
+                                           self.zero_fit[2]))
+        one_max = self.adus[one_slice][self.one_hist[one_slice].argmax()]
+        self.one_fit, _ = curve_fit(gauss,
+                                    self.adus[one_slice],
+                                    self.one_hist[one_slice],
+                                    bounds=([0, one_max - 10, 0], [np.inf, one_max + 10, np.inf]))
 
     def update_plot(self):
         self.update_fit()
         self.zero_plot.setData(self.adus, gauss(self.adus,
                                                 self.zero_fit[0],
-                                                self.zero_adu,
-                                                self.zero_fit[1]))
+                                                self.zero_fit[1],
+                                                self.zero_fit[2]))
         self.one_plot.setData(self.adus, gauss(self.adus,
                                                self.one_fit[0],
-                                               self.one_adu,
-                                               self.one_fit[1]))
+                                               self.one_fit[1],
+                                               self.one_fit[2]))
         self.zero_label.setText("Zero ADU: {:5.1f}".format(self.zero_adu))
         self.one_label.setText("One ADU: {:5.1f}".format(self.one_adu))
 
@@ -280,18 +285,19 @@ class HGData(object):
         hist, adus = self.log_hist(full_roi)
         hist = median_filter(hist, 3)
         zero_slice = slice(int(zero_roi[0] - full_roi[0]), int(zero_roi[1] - full_roi[0]))
-        zero_adu = adus[zero_slice][hist[zero_slice].argmax()]
-        zero_fit, _ = curve_fit(lambda x, amplitude, sigma: gauss(x, amplitude, zero_adu, sigma),
+        zero_max = adus[zero_slice][hist[zero_slice].argmax()]
+        zero_fit, _ = curve_fit(gauss,
                                 adus[zero_slice],
-                                hist[zero_slice])
+                                hist[zero_slice],
+                                bounds=([0, zero_max - 10, 0], [np.inf, zero_max + 10, np.inf]))
         one_slice = slice(int(one_roi[0] - full_roi[0]), int(one_roi[1] - full_roi[0]))
-        one_hist = (hist - gauss(adus, zero_fit[0], zero_adu, zero_fit[1]))[one_slice]
-        max_adu = adus[one_slice][one_hist.argmax()]
-        one_fit = curve_fit(gauss,
-                            adus[one_slice],
-                            one_hist,
-                            bounds=([0, max_adu - 5, 0], [np.inf, max_adu + 5, np.inf]))
-        return zero_adu, one_fit[1]
+        one_hist = (hist - gauss(adus, zero_fit[0], zero_fit[1], zero_fit[2]))[one_slice]
+        one_max = adus[one_slice][one_hist.argmax()]
+        one_fit, _ = curve_fit(gauss,
+                               adus[one_slice],
+                               one_hist,
+                               bounds=([0, one_max - 10, 0], [np.inf, one_max + 10, np.inf]))
+        return zero_fit[1], one_fit[1]
 
     # def mg_calibrate(self, rel_roi=(20, 60)):
     #     hg_totals = np.sum(np.array(self.hg_data <= 0, dtype=np.uint32), axis=0)
@@ -306,4 +312,3 @@ class HGData(object):
     #                            rel_hist,
     #                            bounds=([rel_roi[0], 0], [rel_roi[1], 20]))
     #     return rel_fit[0]
-    
