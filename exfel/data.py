@@ -246,11 +246,11 @@ class RawModuleData(RawData):
                                             train_path.format(module_id))
         self.module_id = module_id
 
-class RawDataJoined(CheetahData):
+class RawJoined(CheetahData):
     GAIN_KEY = utils.GAIN_KEY
 
     def __init__(self, file_path, data_path, pulse_path, train_path):
-        super(RawDataJoined, self).__init__(file_path=file_path,
+        super(RawJoined, self).__init__(file_path=file_path,
                                            data_path=data_path,
                                            pulse_path=pulse_path,
                                            train_path=train_path)
@@ -267,7 +267,7 @@ class RawDataJoined(CheetahData):
                      (self.TRAIN_KEY, self.train_ids[start:stop, 0]),
                      (self.PULSE_KEY, self.pulse_ids[start:stop, 0])])
 
-class RawModuleJoined(RawDataJoined):
+class RawModuleJoined(RawJoined):
     def __init__(self,
                  module_id,
                  file_path,

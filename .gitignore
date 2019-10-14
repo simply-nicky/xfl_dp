@@ -3,6 +3,7 @@ cheetah/
 energyscans/
 hdf5/
 raw/
+calib/
 wavefronts/
 
 # Miscellaneous data

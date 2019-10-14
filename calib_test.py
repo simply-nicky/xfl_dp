@@ -23,7 +23,8 @@ def calib_raw(module_id=0,
     print("Pulse ID: {0:d}, Data shape: {1}".format(data['pulseId'][0], data['data'].shape))
     dark_calib = DarkCalib(calib_path)
     calib_data = CalibData(data, dark_calib)
-    print("HG_data shape: {}".format(calib_data.hg_data.shape))
+    hg_data = calib_data.hg_data()
+    print("HG_data shape: {}".format(hg_data.data.shape))
     # zero_adu, one_adu = hg_gui_calibrate(hg_data, raw_data.data_file)
     # print("Zero ADU: {0:.1f}, One ADU: {1:.1f}".format(zero_adu, one_adu))
 
