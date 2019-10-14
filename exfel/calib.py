@@ -2,12 +2,12 @@
 calib.py - calibration module
 """
 import sys
-import h5py
 import concurrent.futures
+import h5py
 import numpy as np
-import numba as nb
 import pyqtgraph as pg
 from scipy.optimize import curve_fit
+from scipy.ndimage.filters import median_filter
 from . import utils
 
 try:
@@ -134,7 +134,7 @@ class CalibViewer(QtGui.QWidget):
 
     def update_fit(self):
         zero_slice = self.zero_roi.relative_roi(self.full_roi).index
-        self.zero_adu = self.adus[self.hist[zero_slice].argmax()]
+        self.zero_adu = self.adus[zero_slice][self.hist[zero_slice].argmax()]
         self.zero_fit, _ = curve_fit(lambda x, amplitude, sigma: gauss(x,
                                                                        amplitude,
                                                                        self.zero_adu,
@@ -146,13 +146,12 @@ class CalibViewer(QtGui.QWidget):
                                            self.zero_fit[0],
                                            self.zero_adu,
                                            self.zero_fit[1]))
-        self.one_adu = self.adus[one_slice][self.one_hist[one_slice].argmax()]
-        self.one_fit, _ = curve_fit(lambda x, amplitude, sigma: gauss(x,
-                                                                      amplitude,
-                                                                      self.one_adu,
-                                                                      sigma),
-                                    self.adus[one_slice],
-                                    self.one_hist[one_slice])
+        max_adu = self.adus[one_slice][self.one_hist[one_slice].argmax()]
+        fit, _ = curve_fit(gauss,
+                           self.adus[one_slice],
+                           self.one_hist[one_slice],
+                           bounds=([0, max_adu - 5, 0], [np.inf, max_adu + 5, np.inf]))
+        self.one_adu, self.one_fit = fit[1], [fit[0], fit[2]]
 
     def update_plot(self):
         self.update_fit()
@@ -245,7 +244,7 @@ class HGData(object):
     def size(self):
         return self.data.shape[0]
 
-    def hist_frame(self, idx, roi=(-50, 150)):
+    def hist_frame(self, idx, roi=(-200, 100)):
         hist, edges = np.histogram(self.data[idx].ravel(), roi[1] - roi[0], range=roi)
         if roi[0] < 0 < roi[1]:
             zero_peak = abs(roi[0])
@@ -264,25 +263,35 @@ class HGData(object):
         self.zero_adus = np.array([fut.result() for fut in futures])
         self.data = (self.data.T - self.zero_adus).T
 
-    def histogram(self, roi=(-50, 150)):
+    def histogram(self, roi=(-100, 200)):
         return self.hist_frame(slice(0, self.size), roi=roi)
 
-    def calibrate_gui(self, roi=(-50, 150)):
+    def log_hist(self, roi=(-100, 200)):
         hist, adus = self.histogram(roi)
         hist[hist == 0] = 1
-        zero_adu, one_adu = run_app(np.log(hist), adus)
+        return np.log(hist) - np.log(hist.min()), adus
+
+    def calibrate_gui(self, roi=(-100, 200)):
+        hist, adus = self.log_hist(roi)
+        zero_adu, one_adu = run_app(median_filter(hist, 3), adus)
         return zero_adu, one_adu
 
-    def calibrate(self, full_roi=(-50, 150), zero_roi=(-50, 50), one_roi=(30, 100)):
-        hist, adus = self.histogram(full_roi)
+    def calibrate(self, full_roi=(-100, 200), zero_roi=(-50, 50), one_roi=(30, 100)):
+        hist, adus = self.log_hist(full_roi)
+        hist = median_filter(hist, 3)
         zero_slice = slice(int(zero_roi[0] - full_roi[0]), int(zero_roi[1] - full_roi[0]))
-        zero_adu = adus[hist[zero_slice].argmax()]
+        zero_adu = adus[zero_slice][hist[zero_slice].argmax()]
         zero_fit, _ = curve_fit(lambda x, amplitude, sigma: gauss(x, amplitude, zero_adu, sigma),
                                 adus[zero_slice],
                                 hist[zero_slice])
         one_slice = slice(int(one_roi[0] - full_roi[0]), int(one_roi[1] - full_roi[0]))
-        one_adu = adus[one_slice][(hist - gauss(adus, zero_fit[0], zero_adu, zero_fit[1]))[one_slice].argmax()]
-        return zero_adu, one_adu
+        one_hist = (hist - gauss(adus, zero_fit[0], zero_adu, zero_fit[1]))[one_slice]
+        max_adu = adus[one_slice][one_hist.argmax()]
+        one_fit = curve_fit(gauss,
+                            adus[one_slice],
+                            one_hist,
+                            bounds=([0, max_adu - 5, 0], [np.inf, max_adu + 5, np.inf]))
+        return zero_adu, one_fit[1]
 
     # def mg_calibrate(self, rel_roi=(20, 60)):
     #     hg_totals = np.sum(np.array(self.hg_data <= 0, dtype=np.uint32), axis=0)
@@ -297,3 +306,4 @@ class HGData(object):
     #                            rel_hist,
     #                            bounds=([rel_roi[0], 0], [rel_roi[1], 20]))
     #     return rel_fit[0]
+    
