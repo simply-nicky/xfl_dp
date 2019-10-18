@@ -1,2 +1,2 @@
-from .wrapper import main
+from .process import main
 main()

@@ -4,6 +4,7 @@ calib.py - calibration module
 import sys
 import concurrent.futures
 import h5py
+import os
 import numpy as np
 import pyqtgraph as pg
 from scipy.optimize import curve_fit
@@ -55,11 +56,6 @@ class ROI(object):
     def relative_roi(self, base_roi):
         return ROI(self.lower_bound - base_roi.lower_bound,
                    self.higher_bound - base_roi.lower_bound)
-
-FULL_ROI = ROI(-50, 150)
-ZERO_ROI = ROI(-50, 50)
-ONE_ROI = ROI(30, 100)
-REL_ROI = ROI(20, 60)
 
 class CalibViewer(QtGui.QWidget):
     def __init__(self, hist, adus, parent=None):
@@ -179,25 +175,46 @@ def run_app(hist, adus):
     app.exec_()
     return main_win.zero_adu, main_win.one_adu
 
-class DarkCalib(object):
+class DarkAGIPD(object):
     OFFSET_KEY = OFFSET_KEY
     BADMASK_KEY = BADMASK_KEY
     GAIN_LEVEL_KEY = GAIN_LEVEL_KEY
 
     def __init__(self, filename):
         self.data_file = h5py.File(filename, 'r')
+    
+    @property
+    def offset(self):
+        return self.data_file[self.OFFSET_KEY]
+    
+    @property
+    def gain_level(self):
+        return self.data_file[self.GAIN_LEVEL_KEY]
+
+    @property
+    def bad_mask(self):
+        return self.data_file[self.BADMASK_KEY]
+
+    def dark_module(self, module_id):
+        return DarkModule(offset=self.offset[:, :, module_id],
+                          gain_level=self.gain_level[:, :, module_id],
+                          bad_mask=self.bad_mask[:, :, module_id])
+
+class DarkModule(object):
+    def __init__(self, offset, gain_level, bad_mask):
+        self._offset, self._gain_level, self._bad_mask = offset, gain_level, bad_mask
 
     def offset(self, gain_mode, pid):
-        return self.data_file[self.OFFSET_KEY][gain_mode, pid]
+        return self._offset[gain_mode, pid]
 
     def bad_mask(self, gain_mode, pid):
-        return self.data_file[self.BADMASK_KEY][gain_mode, pid]
+        return self._bad_mask[gain_mode, pid]
 
     def bad_mask_inv(self, gain_mode, pid):
         return 1 - self.bad_mask(gain_mode, pid)
 
     def gain_level(self, gain_mode, pid):
-        return self.data_file[self.GAIN_LEVEL_KEY][gain_mode, pid]
+        return self._gain_level[gain_mode, pid]
 
 class CalibData(object):
     def __init__(self, data, dark_calib):
@@ -228,10 +245,20 @@ class CalibData(object):
         gain_mask = self.raw_gain > self.mg_threshold
         return gain_mask & self.mg_bad_mask
 
+    def _create_out_file(self, out_path):
+        utils.make_output_dir(os.path.dirname(out_path))
+        return h5py.File(out_path, 'w')
+
     def hg_data(self, images=(0, 10)):
         adus = self.raw_data[images[0]:images[1]] - self.hg_offset
         mask = self.hg_mask[images[0]:images[1]]
         return HGData(adus * mask)
+
+    def save_hg_data(self, out_path, images=(0, 10)):
+        hg_data = self.hg_data(images)
+        out_file = self._create_out_file(out_path)
+        data_group = out_file.create_group('data')
+        data_group.create_dataset('hg_data', data=hg_data)
 
     def mg_data(self, images=(0, 10)):
         adus = self.raw_data[images[0]:images[1]] - self.mg_offset

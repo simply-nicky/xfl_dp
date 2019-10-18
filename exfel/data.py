@@ -58,10 +58,6 @@ class CheetahData(object):
         self.data_path, self.pulse_path, self.train_path = data_path, pulse_path, train_path
 
     @property
-    def out_path(self):
-        return os.path.join(self.OUT_FOLDER, os.path.basename(self.file_path))
-
-    @property
     def size(self):
         return self.data.shape[0]
 
@@ -149,9 +145,9 @@ class CheetahData(object):
             results = results[0]
         return results
 
-    def _create_out_file(self):
-        utils.make_output_dir(os.path.dirname(self.out_path))
-        return h5py.File(self.out_path, 'w')
+    def _create_out_file(self, out_path):
+        utils.make_output_dir(os.path.dirname(out_path))
+        return h5py.File(out_path, 'w')
 
     def _save_parameters(self, out_file):
         arg_group = out_file.create_group('arguments')
@@ -168,8 +164,8 @@ class CheetahData(object):
             else:
                 data_group.create_dataset(key, data=data[key])
 
-    def save(self):
-        out_file = self._create_out_file()
+    def save(self, out_path):
+        out_file = self._create_out_file(out_path)
         self._save_parameters(out_file)
         data = self.get_data()
         self._save_data(data, out_file)
@@ -187,8 +183,8 @@ class CheetahData(object):
                 else:
                     pid_group.create_dataset(key, data=data[key])
 
-    def save_ordered(self, pids=None):
-        out_file = self._create_out_file()
+    def save_ordered(self, out_path, pids=None):
+        out_file = self._create_out_file(out_path)
         self._save_parameters(out_file)
         data = self.get_ordered_data(pids)
         if isinstance(pids, int):
@@ -279,27 +275,3 @@ class RawModuleJoined(RawJoined):
                                               pulse_path.format(module_id),
                                               train_path.format(module_id))
         self.module_id = module_id
-
-def main():
-    parser = argparse.ArgumentParser(description='Run XFEL post processing of cheetah data')
-    parser.add_argument('rnum', type=int, help='run number')
-    parser.add_argument('cnum', type=int, help='cheetah number')
-    parser.add_argument('tag', type=str, help='cheetah tag associated with the current run (written after a hyphen in the cheetah folder name)')
-    parser.add_argument('limit', type=int, nargs='?', default=20000, help='minimum ADU value to trim out black images')
-    parser.add_argument('outdir', type=str, nargs='?', default=os.path.dirname(os.path.dirname(__file__)), help='output folder location to write processed data')
-    parser.add_argument('-off', '--offline', action='store_true', help='offline - run not in Maxwell cluster for debug purposes')
-    parser.add_argument('-v', '--verbosity', action='store_true', help='increase output verbosity')
-    args = parser.parse_args()
-
-    xfl_data = CheetahData(args.rnum, args.cnum, args.limit)
-    if args.verbosity:
-        print("List of typed arguments:")
-        for key, val in vars(args).items():
-            print(key, val, sep=' = ')
-        print("cheetah data is located in %s" % xfl_data.file_path)
-        print("Writing data to folder: %s" % xfl_data.out_path)
-        xfl_data.save()
-        print("Done")
-    else:
-        xfl_data.save()
-        
