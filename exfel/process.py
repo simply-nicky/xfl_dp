@@ -4,14 +4,16 @@ from .data import RawModuleJoined
 from .calib import DarkAGIPD, CalibData
 from .batch_jobs import ConfigParser
 
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.ini')
 BEAM_LINES = ('DETLAB', 'FXE', 'HED', 'HSLAB', 'ITLAB', 'LA1',
               'LA2', 'MID', 'SA1', 'SA2', 'SA3', 'SCS', 'SPB',
               'SQS', 'TST', 'TSTSA2', 'TSTSA3', 'XMPL')
 
 class Process(object):
     DATA_STRUCTURE = "raw/r{run_number:04d}/RAW-R{run_number:04d}-AGIPD{module_id:02d}-S{chunk_num:05d}.h5"
+    DATA_FOLDER = "raw/r{run_number:04d}"
     OUT_PID_PATH = "r{run_number:04d}/AGIPD{module_id:02d}-{tag:s}{pid:03d}.h5"
-    DARK_CALIB_PATH = "/r{hg_run:04d}-r{mg_run:04d}-r{lg_run:04d}/Cheetah-AGIPD-calib.h5"
+    DARK_CALIB_PATH = "r{hg_run:04d}-r{mg_run:04d}-r{lg_run:04d}/Cheetah-AGIPD-calib.h5"
     DATA_PATH = "/INSTRUMENT/{beam_line:s}_DET_AGIPD1M-1/DET/{module_id:d}CH0:xtdf/image/data"
     TRAIN_PATH = "/INSTRUMENT/{beam_line:s}_DET_AGIPD1M-1/DET/{module_id:d}CH0:xtdf/image/trainId"
     PULSE_PATH = "/INSTRUMENT/{beam_line:s}_DET_AGIPD1M-1/DET/{module_id:d}CH0:xtdf/image/pulseId"
@@ -37,6 +39,11 @@ class Process(object):
         if not os.path.exists(dark_path):
             raise ValueError('Wrong dark calibration path: {}'.format(dark_path))
         self.dark_calib = DarkAGIPD(dark_path)
+
+    @property
+    def file_folder(self):
+        return os.path.join(self.config.raw_path,
+                            self.DATA_FOLDER.format(run_number=self.run_number))
 
     def out_path(self, module_id, pid, tag):
         return os.path.join(self.config.out_base,
@@ -69,8 +76,8 @@ class Process(object):
 
     def list_files(self):
         return [filename
-                for filename in os.listdir(self.config.out_base)
-                if os.path.isfile(os.path.join(self.config.out_base, filename))]
+                for filename in os.listdir(self.file_folder)
+                if "AGIPD" in filename]
 
     def save_cell_data(self, module_id, chunk_num, pid):
         raw_data = self.data_file(module_id, chunk_num)
@@ -98,7 +105,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run raw AGIPD data processing')
     parser.add_argument('run_number', type=int, help='run number')
     parser.add_argument('run_type', type=str, choices=['pid', 'hg', 'list'], help='Process type')
-    parser.add_argument('--config_file', type=str, default='config.ini', help='Configuration file')
+    parser.add_argument('--config_file', type=str, default=CONFIG_PATH, help='Configuration file')
     parser.add_argument('--chunk_number', type=int, help='chunk number')
     parser.add_argument('--module_id', type=int, help='AGIPD module number')
     parser.add_argument('--pulse_id', type=int, help='PulseID to extract data')

@@ -9,17 +9,17 @@ import numpy as np
 import pyqtgraph as pg
 from scipy.optimize import curve_fit
 from scipy.ndimage.filters import median_filter
-from . import utils
+from .utils import HIGH_GAIN, MEDIUM_GAIN, make_output_dir
 
 try:
     from PyQt5 import QtCore, QtGui, QtWidgets
 except ImportError:
     from PyQt4 import QtCore, QtGui, QtWidgets
 
-MODULES_NUM = 16
 HG_GAIN = 1 / 68.8
 MG_GAIN = 1 / 1.376
-LG_GAIN = 5 / 1.376
+CELL_ID = 1
+
 OFFSET_KEY = "AnalogOffset"
 BADMASK_KEY = "Badpixel"
 GAIN_LEVEL_KEY = "DigitalGainLevel"
@@ -179,91 +179,64 @@ class DarkAGIPD(object):
     OFFSET_KEY = OFFSET_KEY
     BADMASK_KEY = BADMASK_KEY
     GAIN_LEVEL_KEY = GAIN_LEVEL_KEY
+    MODULE_SHAPE = (512, 128)
 
     def __init__(self, filename):
         self.data_file = h5py.File(filename, 'r')
-    
-    @property
-    def offset(self):
-        return self.data_file[self.OFFSET_KEY]
-    
-    @property
-    def gain_level(self):
-        return self.data_file[self.GAIN_LEVEL_KEY]
+
+    def offset(self, gain_mode, cell_id, module_id):
+        return self.data_file[self.OFFSET_KEY][gain_mode, cell_id, module_id]
+
+    def gain_level(self, gain_mode, cell_id, module_id):
+        return self.data_file[self.GAIN_LEVEL_KEY][gain_mode, cell_id, module_id]
+
+    def bad_mask(self, module_id):
+        idxs = (slice(self.MODULE_SHAPE[0] * module_id, self.MODULE_SHAPE[0] * (module_id + 1)),)
+        return self.data_file[self.BADMASK_KEY][idxs]
+
+    def bad_mask_inv(self, module_id):
+        return 1 - self.bad_mask(module_id)
+
+class AGIPDCalib(object):
+    GAIN = np.array([HG_GAIN, MG_GAIN])
+    CELL_ID = CELL_ID
+    FLAT_ROI = (0, 10)
+
+    def __init__(self, raw_data, raw_gain, dark, module_id, mask_inv=True):
+        self.raw_data, self.raw_gain, self.dark, self.module_id = raw_data, raw_gain, dark, module_id
+        self.bad_mask = self.dark.bad_mask_inv(module_id) if mask_inv else self.dark.bad_mask(module_id)
+        self._init_adu()
+        self._flat_correct()
+        self._init_mask()
+        self.data = ((self.adu * self.mask).T * self.GAIN).T
+
+    def _init_adu(self):
+        hg_adus = self.raw_data - self.dark.offset(HIGH_GAIN, self.CELL_ID, self.module_id)
+        mg_adus = self.raw_data - self.dark.offset(MEDIUM_GAIN, self.CELL_ID, self.module_id)
+        self.adu = np.stack((hg_adus, mg_adus))
+
+    def _flat_correct(self):
+        self.zero_levels = self.adu[0, :, self.FLAT_ROI[0]:self.FLAT_ROI[1]].mean(axis=(1, 2))
+        self.adu[0] = (self.adu[0].T - self.zero_levels).T
+
+    def _init_mask(self):
+        hg_mask = (self.raw_gain < self.dark.gain_level(MEDIUM_GAIN,
+                                                        self.CELL_ID,
+                                                        self.module_id)).astype(np.uint8)
+        mg_mask = (self.raw_gain > self.dark.gain_level(MEDIUM_GAIN,
+                                                        self.CELL_ID,
+                                                        self.module_id)).astype(np.uint8)
+        self.mask = np.stack((hg_mask, mg_mask)) * self.bad_mask
 
     @property
-    def bad_mask(self):
-        return self.data_file[self.BADMASK_KEY]
+    def calib_data(self):
+        return self.data.sum(axis=0)
 
-    def dark_module(self, module_id):
-        return DarkModule(offset=self.offset[:, :, module_id],
-                          gain_level=self.gain_level[:, :, module_id],
-                          bad_mask=self.bad_mask[:, :, module_id])
-
-class DarkModule(object):
-    def __init__(self, offset, gain_level, bad_mask):
-        self._offset, self._gain_level, self._bad_mask = offset, gain_level, bad_mask
-
-    def offset(self, gain_mode, pid):
-        return self._offset[gain_mode, pid]
-
-    def bad_mask(self, gain_mode, pid):
-        return self._bad_mask[gain_mode, pid]
-
-    def bad_mask_inv(self, gain_mode, pid):
-        return 1 - self.bad_mask(gain_mode, pid)
-
-    def gain_level(self, gain_mode, pid):
-        return self._gain_level[gain_mode, pid]
-
-class CalibData(object):
-    def __init__(self, data, dark_calib):
-        self.raw_data, self.raw_gain = data[utils.DATA_KEY], data[utils.GAIN_KEY]
-        self.pid, self.train_id = data[utils.PULSE_KEY][0], data[utils.TRAIN_KEY]
-        self.hg_offset = dark_calib.offset(utils.HIGH_GAIN, self.pid)
-        self.mg_offset = dark_calib.offset(utils.MEDIUM_GAIN, self.pid)
-        self.hg_bad_mask = dark_calib.bad_mask_inv(utils.HIGH_GAIN, self.pid)
-        self.mg_bad_mask = dark_calib.bad_mask_inv(utils.MEDIUM_GAIN, self.pid)
-        self.mg_threshold = dark_calib.gain_level(utils.MEDIUM_GAIN, self.pid)
-
-    @property
-    def size(self):
-        return self.raw_data.shape[0]
-
-    @property
-    def chunks(self):
-        limits = np.linspace(0, self.size, utils.CORES_COUNT).astype(int)
-        return list(zip(limits[:-1], limits[1:]))
-
-    @property
-    def hg_mask(self):
-        gain_mask = self.raw_gain < self.mg_threshold
-        return gain_mask & self.hg_bad_mask
-
-    @property
-    def mg_mask(self):
-        gain_mask = self.raw_gain > self.mg_threshold
-        return gain_mask & self.mg_bad_mask
-
-    def _create_out_file(self, out_path):
-        utils.make_output_dir(os.path.dirname(out_path))
-        return h5py.File(out_path, 'w')
-
-    def hg_data(self, images=(0, 10)):
-        adus = self.raw_data[images[0]:images[1]] - self.hg_offset
-        mask = self.hg_mask[images[0]:images[1]]
-        return HGData(adus * mask)
-
-    def save_hg_data(self, out_path, images=(0, 10)):
-        hg_data = self.hg_data(images)
-        out_file = self._create_out_file(out_path)
-        data_group = out_file.create_group('data')
-        data_group.create_dataset('hg_data', data=hg_data)
-
-    def mg_data(self, images=(0, 10)):
-        adus = self.raw_data[images[0]:images[1]] - self.mg_offset
-        mask = self.mg_mask[images[0]:images[1]]
-        return adus * mask
+    def save_data(self, out_file):
+        data_group = out_file.create_group('MODULE{:02d}'.format(self.module_id))
+        data_group.create_dataset('adu', data=self.adu)
+        data_group.create_dataset('mask', data=self.mask)
+        data_group.create_dataset('data', data=self.data)
 
 class HGData(object):
     ZERO_VERGE = 50

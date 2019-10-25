@@ -3,9 +3,10 @@ import configparser
 import argparse
 import os
 
-SHELL_SCRIPT = os.path.abspath('process.sh')
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.ini')
-PACKAGE_NAME = 'exfel'
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+SHELL_SCRIPT = os.path.join(PROJECT_ROOT, 'process.sh')
+CONFIG_PATH = os.path.join(PROJECT_ROOT, 'config.ini')
+PACKAGE_NAME = os.path.basename(PROJECT_ROOT)
 
 class ConfigParser(object):
     def __init__(self, config_file):
@@ -26,8 +27,8 @@ class ConfigParser(object):
 class JobsParser(object):
     BATCH_CMD = 'sbatch'
 
-    def __init__(self, shell_script, config_file):
-        self.shell_script = shell_script
+    def __init__(self, shell_script, config_file, test=False):
+        self.shell_script, self.test = shell_script, test
         self.config = ConfigParser(config_file)
         self.batch_out = os.path.join(self.config.out_base, 'sbatch_out')
 
@@ -36,11 +37,20 @@ class JobsParser(object):
         print('Submitting job {}'.format(new_job.job_name))
         print('Shell script: {}'.format(self.shell_script))
         print('Command: {}'.format(' '.join(new_job.cmd)))
-        output = subprocess.call(new_job.cmd, check=True, capture_output=True)
-        job_num = output.stdout.rstrip().decode("unicode_escape")
-        print("The job {0:s} has been submitted".format(new_job.job_name))
-        print("Job ID: {:d}".format(job_num))
-        return job_num
+        if self.test:
+            return -1
+        else:
+            try:
+                output = subprocess.run(args=new_job.cmd, check=True, capture_output=True)
+            except subprocess.CalledProcessError as error:
+                err_text = "Command '{}' return with error (code {}): {}".format(' '.join(error.cmd),
+                                                                                 error.returncode,
+                                                                                 error.stderr)
+                raise RuntimeError(err_text) from error
+            job_num = int(output.stdout.rstrip().decode("unicode_escape").split()[-1])
+            print("The job {0:s} has been submitted".format(new_job.job_name))
+            print("Job ID: {:d}".format(job_num))
+            return job_num
 
 class Job(object):
     JOB_NAME = {'list': "list_r{run_number:04d}",
@@ -53,18 +63,17 @@ class Job(object):
 
     @property
     def job_name(self):
-        return self.JOB_NAME[self.run_type].format(self.kwparams)
+        return self.JOB_NAME[self.run_type].format(**self.kwparams)
 
     @property
     def sbatch_params(self):
-        return ['--job_name', self.job_name,
+        return ['--partition', 'upex', '--job-name', self.job_name,
                 '--output', os.path.join(self.job_parser.batch_out, '{}.out'.format(self.job_name)),
                 '--error', os.path.join(self.job_parser.batch_out, '{}.err'.format(self.job_name))]
 
     @property
     def shell_params(self):
-        params = [os.path.dirname(__file__), PACKAGE_NAME]
-        params += [self.kwparams['run_number'], self.run_type]
+        params = [PROJECT_ROOT, str(self.kwparams['run_number']), self.run_type]
         params += ['--config_file', self.job_parser.config.config_file]
         if self.run_type in ['hg', 'pid']:
             try:
@@ -99,9 +108,10 @@ def main():
     parser.add_argument('run_type', type=str, choices=['pid', 'hg', 'list'], help='Process type')
     parser.add_argument('--config_file', type=str, default=CONFIG_PATH, help='Configuration file')
     parser.add_argument('--pulse_id', type=int, help='PulseID to extract data')
+    parser.add_argument('--test', action='store_true', help='Testing the module')
     args = parser.parse_args()
 
-    jobs_parser = JobsParser(SHELL_SCRIPT, args.config_file)
+    jobs_parser = JobsParser(SHELL_SCRIPT, args.config_file, args.test)
     jobs_parser.batch(run_type=args.run_type,
                       run_number=args.run_number,
                       config_file=args.config_file)
