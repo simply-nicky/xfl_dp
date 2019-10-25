@@ -1,7 +1,8 @@
 import os
+import h5py
 import argparse
 from .data import RawModuleJoined
-from .calib import DarkAGIPD, CalibData
+from .calib import DarkAGIPD, AGIPDCalib
 from .batch_jobs import ConfigParser
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.ini')
@@ -94,12 +95,13 @@ class Process(object):
         data = raw_data.get_ordered_data(pids=pid)
         print('Data shape: {}'.format(data['data'].shape))
         print('Applying dark calibration files: {}'.format(self.dark_calib.data_file.filename))
-        dark_module = self.dark_calib.dark_module(module_id)
-        calib_data = CalibData(data, dark_module)
+        calib_data = AGIPDCalib(data['data'], data['gain'], self.dark_calib, module_id)
         out_path = self.out_path(module_id, pid, 'HG')
         print('Getting the High Gain data')
         print('Writing to file: {}'.format(out_path))
-        calib_data.save_hg_data(out_path)
+        out_file = h5py.File(out_path, 'w')
+        calib_data.save_data(out_file)
+        out_file.close()
 
 def main():
     parser = argparse.ArgumentParser(description='Run raw AGIPD data processing')

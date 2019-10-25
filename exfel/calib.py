@@ -4,12 +4,11 @@ calib.py - calibration module
 import sys
 import concurrent.futures
 import h5py
-import os
 import numpy as np
 import pyqtgraph as pg
 from scipy.optimize import curve_fit
 from scipy.ndimage.filters import median_filter
-from .utils import HIGH_GAIN, MEDIUM_GAIN, make_output_dir
+from .utils import HIGH_GAIN, MEDIUM_GAIN
 
 try:
     from PyQt5 import QtCore, QtGui, QtWidgets
@@ -181,8 +180,9 @@ class DarkAGIPD(object):
     GAIN_LEVEL_KEY = GAIN_LEVEL_KEY
     MODULE_SHAPE = (512, 128)
 
-    def __init__(self, filename):
+    def __init__(self, filename, mask_inv=True):
         self.data_file = h5py.File(filename, 'r')
+        self.mask_inv = mask_inv
 
     def offset(self, gain_mode, cell_id, module_id):
         return self.data_file[self.OFFSET_KEY][gain_mode, cell_id, module_id]
@@ -190,21 +190,17 @@ class DarkAGIPD(object):
     def gain_level(self, gain_mode, cell_id, module_id):
         return self.data_file[self.GAIN_LEVEL_KEY][gain_mode, cell_id, module_id]
 
-    def bad_mask(self, module_id):
-        idxs = (slice(self.MODULE_SHAPE[0] * module_id, self.MODULE_SHAPE[0] * (module_id + 1)),)
-        return self.data_file[self.BADMASK_KEY][idxs]
-
-    def bad_mask_inv(self, module_id):
-        return 1 - self.bad_mask(module_id)
+    def bad_mask(self, gain_mode, cell_id, module_id):
+        bad_mask = self.data_file[self.BADMASK_KEY][gain_mode, cell_id, module_id]
+        return 1 - bad_mask if self.mask_inv else bad_mask
 
 class AGIPDCalib(object):
     GAIN = np.array([HG_GAIN, MG_GAIN])
     CELL_ID = CELL_ID
-    FLAT_ROI = (0, 10)
+    FLAT_ROI = (0, 20)
 
-    def __init__(self, raw_data, raw_gain, dark, module_id, mask_inv=True):
+    def __init__(self, raw_data, raw_gain, dark, module_id):
         self.raw_data, self.raw_gain, self.dark, self.module_id = raw_data, raw_gain, dark, module_id
-        self.bad_mask = self.dark.bad_mask_inv(module_id) if mask_inv else self.dark.bad_mask(module_id)
         self._init_adu()
         self._flat_correct()
         self._init_mask()
@@ -226,7 +222,8 @@ class AGIPDCalib(object):
         mg_mask = (self.raw_gain > self.dark.gain_level(MEDIUM_GAIN,
                                                         self.CELL_ID,
                                                         self.module_id)).astype(np.uint8)
-        self.mask = np.stack((hg_mask, mg_mask)) * self.bad_mask
+        bad_mask = self.dark.bad_mask(HG_GAIN, self.CELL_ID, self.module_id)
+        self.mask = np.stack((hg_mask, mg_mask)) * bad_mask
 
     @property
     def calib_data(self):
